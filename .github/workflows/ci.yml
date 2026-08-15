@@ -1,0 +1,120 @@
+name: CI
+
+on:
+  push:
+    branches: [dx]
+    tags: ['v*']
+  pull_request:
+    branches: [dx]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * *"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Shell unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test-shell
+
+  deps:
+    name: Deps preflight (${{ matrix.slug }})
+    # Gated on the shell suite: it takes seconds and catches build-logic
+    # breakage, so there is no point spinning up five distro containers behind
+    # an already-failing tree.
+    needs: shell
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12",     slug: "debian-12",     experimental: false }
+          - { image: "debian:13",     slug: "debian-13",     experimental: false }
+          - { image: "fedora:41",     slug: "fedora-41",     experimental: false }
+          - { image: "ubuntu:22.04",  slug: "ubuntu-2204",   experimental: false }
+          - { image: "ubuntu:24.04",  slug: "ubuntu-2404",   experimental: false }
+    steps:
+      - name: Install minimal bootstrap tools
+        run: |
+          if command -v apt-get >/dev/null; then
+            apt-get update
+            apt-get install -y --no-install-recommends git make ca-certificates
+          elif command -v dnf >/dev/null; then
+            dnf install -y git make
+          fi
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@v4
+      - name: Capture dependency diagnostics
+        run: make deps-doctor | tee "deps-doctor-${{ matrix.slug }}.txt"
+      - name: Upload diagnostics for doc harvesting
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deps-doctor-${{ matrix.slug }}
+          path: deps-doctor-${{ matrix.slug }}.txt
+      - name: Install declared dependencies
+        run: make deps
+      - name: Re-run shell unit tests on this release
+        run: make test-shell
+
+  build:
+    name: Build (${{ matrix.slug }})
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.experimental }}
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: "debian:12",     slug: "debian-12",     experimental: false }
+          - { image: "fedora:41",     slug: "fedora-41",     experimental: false }
+          - { image: "ubuntu:24.04",  slug: "ubuntu-2404",   experimental: false }
+    steps:
+      - name: Install minimal bootstrap tools
+        run: |
+          if command -v apt-get >/dev/null; then
+            apt-get update
+            apt-get install -y --no-install-recommends git make ca-certificates
+          elif command -v dnf >/dev/null; then
+            dnf install -y git make
+          fi
+          git config --global --add safe.directory '*'
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache downloads and ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ccache
+            archive
+          key: build-${{ matrix.slug }}-${{ hashFiles('make/**/*.mk', 'Makefile') }}
+          restore-keys: |
+            build-${{ matrix.slug }}-
+      - name: Bootstrap (deps, ffmpeg, libstb-hal, neutrino)
+        run: make bootstrap
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.slug }}
+          path: |
+            **/config.log
+            logs/**
+          if-no-files-found: ignore
