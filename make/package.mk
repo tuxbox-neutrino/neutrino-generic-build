@@ -31,6 +31,15 @@ APPIMAGE_SYSROOT ?= $(OUTPUT_DIR)/sysroot-appimage
 # flag would reintroduce through that string exactly the path it removes.
 APPIMAGE_PREFIX_MAP ?= -ffile-prefix-map=$(ROOT_DIR)=.
 
+# Bundle the GStreamer modules exactly when the build can use them. They are
+# loaded with dlopen, so nothing in the binary refers to them and the packaging
+# script cannot tell on its own -- it defaults to bundling and stops the build
+# when pkg-config finds no plugin directory. With the repository's own default
+# flags libstb-hal is built without GStreamer and no such directory exists, so
+# `make package-appimage` failed on a fresh checkout while working on a machine
+# that happened to have the development files. Same switch as neutrino.mk reads.
+APPIMAGE_BUNDLE_GSTREAMER ?= $(if $(findstring --enable-gstreamer,$(LIBSTB_HAL_CONFIGURE_FLAGS)),1,0)
+
 .PHONY: package-appimage-stage
 # The dependency stamps live under BUILD_DIR, which this target does not
 # override, while NEUTRINO_INSTALL_DIR is overridden. A dependency that happens
@@ -112,6 +121,7 @@ package-appimage-build: package-appimage-stage
 	NEUTRINO_INSTALL_DIR=$(APPIMAGE_SYSROOT) \
 		NEUTRINO_APPIMAGE_PREFIX=$(APPIMAGE_RUNTIME_PREFIX) \
 		APPIMAGE_OUTPUT_DIR=$(APPIMAGE_OUTPUT_DIR) \
+		APPIMAGE_BUNDLE_GSTREAMER=$(APPIMAGE_BUNDLE_GSTREAMER) \
 		APPIMAGE_TOOL="$${APPIMAGE_TOOL_PATH}" \
 		APPIMAGE_RUNTIME_FILE="$${APPIMAGE_RUNTIME_PATH}" \
 		APPIMAGE_DEPLOY_TOOL="$${APPIMAGE_DEPLOY_PATH}" \
@@ -142,6 +152,7 @@ package-appimage-verify:
 	done; \
 	APPIMAGE_OUTPUT_DIR=$(APPIMAGE_OUTPUT_DIR) \
 		NEUTRINO_APPIMAGE_PREFIX=$(APPIMAGE_RUNTIME_PREFIX) \
+		APPIMAGE_BUNDLE_GSTREAMER=$(APPIMAGE_BUNDLE_GSTREAMER) \
 		./scripts/verify_appimage.sh
 
 .PHONY: package-deb-build
