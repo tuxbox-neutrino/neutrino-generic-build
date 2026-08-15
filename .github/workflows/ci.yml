@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [dx]
+    # ci-package exists to drive the AppImage job below. workflow_dispatch only
+    # offers the default branch's copy of this file, and this workflow does not
+    # live there yet, so pushing a branch is the one trigger available.
+    branches: [dx, ci-package]
     tags: ['v*']
   pull_request:
     branches: [dx]
@@ -114,6 +117,76 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-${{ matrix.slug }}
+          path: |
+            **/config.log
+            logs/**
+          if-no-files-found: ignore
+
+  appimage:
+    name: AppImage (build, package, verify)
+    # Gated on the shell suite for the same reason as deps: this job takes the
+    # better part of an hour and there is no point starting it behind a tree
+    # that already fails in seconds.
+    needs: shell
+    if: >-
+      github.ref == 'refs/heads/ci-package' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    # Deliberately not a container job, unlike build above. The verification step
+    # starts its own `docker run --privileged` to prove the package runs on a
+    # machine that never built it, and a job that is itself a container has no
+    # docker socket to do that with. Running on the runner host also puts the
+    # AppRun mount namespace under the same conditions a user's machine offers.
+    # The price is the runner's own glibc, so this measures whether the chain
+    # works -- not yet how old a target the package can reach. Building in an
+    # ubuntu:22.04 container to lower that floor is the next step, and needs the
+    # artefact handed to a separate job for verification.
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Cache downloads and ccache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .ccache
+            archive
+          key: appimage-${{ hashFiles('make/**/*.mk', 'Makefile') }}
+          restore-keys: |
+            appimage-
+      - name: Report the ground this runs on
+        run: |
+          echo "glibc: $(ldd --version | head -n1)"
+          echo "unprivileged userns: $(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo 'no knob (allowed)')"
+          unshare --user --map-root-user --mount --propagation private true \
+            && echo "userns+mount namespace: usable" \
+            || echo "userns+mount namespace: DENIED"
+          df -h / | tail -n1
+      - name: Bootstrap (deps, ffmpeg, libstb-hal, neutrino)
+        run: make bootstrap
+      - name: Build the AppImage
+        run: make package-appimage
+      - name: Verify the AppImage
+        run: make package-appimage-verify
+      # Uploaded even when verification failed: the package is the evidence
+      # needed to work out why, and rebuilding it locally takes an hour.
+      - name: Upload the AppImage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: artifacts/appimage/*.AppImage
+          if-no-files-found: warn
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-logs
           path: |
             **/config.log
             logs/**
