@@ -161,7 +161,10 @@ jobs:
             appimage-
       - name: Report the ground this runs on
         run: |
-          echo "glibc: $(ldd --version | head -n1)"
+          # sed, not head: head closes the pipe after the first line, ldd dies of
+          # SIGPIPE and prints two "write error: Broken pipe" lines into the one
+          # step whose purpose is to be readable. sed reads its input to the end.
+          echo "glibc: $(ldd --version | sed -n 1p)"
           echo "unprivileged userns: $(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo 'no knob (allowed)')"
           unshare --user --map-root-user --mount --propagation private true \
             && echo "userns+mount namespace: usable" \
