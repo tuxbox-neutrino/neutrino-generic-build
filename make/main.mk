@@ -35,7 +35,9 @@ include make/env.mk
 include make/env-derive.mk
 include make/toolchain.mk
 include make/deps.mk
+include make/third_party.mk
 include make/neutrino.mk
+include make/lua.mk
 include make/hosttools.mk
 
 # Late hook for project-specific TARGETS that must reference something defined by
