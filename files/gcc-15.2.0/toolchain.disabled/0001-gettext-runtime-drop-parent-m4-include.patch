@@ -1,0 +1,14 @@
+diff --git a/gettext/gettext-runtime/Makefile.am b/gettext/gettext-runtime/Makefile.am
+index 09d6cfa5..939f77f6 100644
+--- a/gettext/gettext-runtime/Makefile.am
++++ b/gettext/gettext-runtime/Makefile.am
+@@
+-ACLOCAL_AMFLAGS = -I m4 -I ../m4 -I gnulib-m4
++ACLOCAL_AMFLAGS = -I m4 -I gnulib-m4
+diff --git a/gettext/gettext-runtime/Makefile.in b/gettext/gettext-runtime/Makefile.in
+index 39751b8a..6e8c356e 100644
+--- a/gettext/gettext-runtime/Makefile.in
++++ b/gettext/gettext-runtime/Makefile.in
+@@
+-ACLOCAL_AMFLAGS = -I m4 -I ../m4 -I gnulib-m4
++ACLOCAL_AMFLAGS = -I m4 -I gnulib-m4

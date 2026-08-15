@@ -1,0 +1,28 @@
+diff --git a/gettext/gettext-runtime/gnulib-lib/Makefile.in b/gettext/gettext-runtime/gnulib-lib/Makefile.in
+index 13514b08..5a6a688e 100644
+--- a/gettext/gettext-runtime/gnulib-lib/Makefile.in
++++ b/gettext/gettext-runtime/gnulib-lib/Makefile.in
+@@
+-AM_CFLAGS = @WARN_CFLAGS@
++AM_CFLAGS =
+diff --git a/gettext/gettext-runtime/intl/Makefile.in b/gettext/gettext-runtime/intl/Makefile.in
+index 3185aacc..0d48094f 100644
+--- a/gettext/gettext-runtime/intl/Makefile.in
++++ b/gettext/gettext-runtime/intl/Makefile.in
+@@
+-AM_CFLAGS = @WARN_CFLAGS@ @CFLAG_VISIBILITY@ @PICFLAG@
++AM_CFLAGS = @CFLAG_VISIBILITY@ @PICFLAG@
+diff --git a/gettext/gettext-runtime/intl/gnulib-lib/Makefile.in b/gettext/gettext-runtime/intl/gnulib-lib/Makefile.in
+index 42aa5cbc..f0a003dd 100644
+--- a/gettext/gettext-runtime/intl/gnulib-lib/Makefile.in
++++ b/gettext/gettext-runtime/intl/gnulib-lib/Makefile.in
+@@
+-AM_CFLAGS = @WARN_CFLAGS@ @PICFLAG@ $(CFLAG_VISIBILITY)
++AM_CFLAGS = @PICFLAG@ $(CFLAG_VISIBILITY)
+diff --git a/gettext/gettext-runtime/src/Makefile.in b/gettext/gettext-runtime/src/Makefile.in
+index 03f4161a..7a1f2e50 100644
+--- a/gettext/gettext-runtime/src/Makefile.in
++++ b/gettext/gettext-runtime/src/Makefile.in
+@@
+-AM_CFLAGS = @WARN_CFLAGS@
++AM_CFLAGS =

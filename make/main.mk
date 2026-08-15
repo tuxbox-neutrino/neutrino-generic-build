@@ -33,6 +33,7 @@ include make/env.mk
 -include Makefile.local
 
 include make/env-derive.mk
+include make/toolchain.mk
 include make/neutrino.mk
 include make/hosttools.mk
 
