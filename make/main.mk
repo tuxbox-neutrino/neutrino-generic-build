@@ -41,6 +41,7 @@ include make/plugins.mk
 include make/lua.mk
 include make/web.mk
 include make/yweb.mk
+include make/tests.mk
 include make/package.mk
 include make/hosttools.mk
 
