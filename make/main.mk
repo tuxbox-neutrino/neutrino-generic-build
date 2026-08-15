@@ -34,6 +34,7 @@ include make/env.mk
 
 include make/env-derive.mk
 include make/toolchain.mk
+include make/deps.mk
 include make/neutrino.mk
 include make/hosttools.mk
 
