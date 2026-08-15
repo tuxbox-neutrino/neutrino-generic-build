@@ -12,33 +12,104 @@
 Diese Umgebung unterstützt drei Paketarten:
 
 1. **AppImage (`make package-appimage`)**
-   - Erstellt eine portable AppDir-Struktur und ruft `appimagetool` auf.
-   - Root-Rechte sind für die Nutzung weiterhin erforderlich; der Launcher weist darauf hin.
-   - Abhängigkeiten werden in die AppDir kopiert, verbleiben jedoch dynamisch gelinkt.
-   - `make package-appimage` ruft automatisch `scripts/ensure_appimagetool.sh` auf. Fehlt das Tool, wird die passende Version nach `tools/` heruntergeladen und für spätere Aufrufe wiederverwendet.
-   - Manuelle Einrichtung (z. B. für Offline-Systeme oder eigene Mirror):
-     1. Aktuelles Binary laden (bei 404 auf den *continuous*-Channel zurückgreifen):
-        ```bash
-        wget -O appimagetool-x86_64.AppImage \
-          https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
-        ```
-     2. Ausführbar machen und in den `PATH` verschieben:
-        ```bash
-        chmod +x appimagetool-x86_64.AppImage
-        sudo mv appimagetool-x86_64.AppImage /usr/local/bin/appimagetool
-        # -- oder ohne Root-Rechte --
-        mkdir -p "$HOME/.local/bin"
-        mv appimagetool-x86_64.AppImage "$HOME/.local/bin/appimagetool"
-        export PATH="$HOME/.local/bin:$PATH"
-        ```
-     3. FUSE-Unterstützung sicherstellen (AppImages mounten intern ein Dateisystem):
-        ```bash
-        sudo apt install libfuse2        # Debian/Ubuntu
-        sudo pacman -S fuse2             # Arch
-        ```
-     4. Test mit `appimagetool --version`.
-     5. Fehlt FUSE auf dem Build-Host, setzt das Skript automatisch `APPIMAGE_EXTRACT_AND_RUN=1` und entpackt das Tool temporär. Das erzeugte AppImage benötigt auf dem Zielsystem dennoch FUSE, sofern es nicht vorab extrahiert wird.
-     - Arch Linux: Alternativ `appimagetool-bin` oder `appimagetool-git` aus dem AUR nutzen.
+   - Baut Neutrino ein zweites Mal und packt es zusammen mit seinen Daten.
+   - Läuft ohne Root. Root wird für DVB- und Input-Geräte gebraucht — und für die
+     Weboberfläche: sie ist auf Port 80 konfiguriert, den ein unprivilegierter
+     Prozess nicht binden darf. Ohne Root weicht Neutrino auf 8080 aus und gibt
+     auf, wenn auch der belegt ist; `WebsiteMain.port` in der benutzereigenen
+     `nhttpd.conf` lässt sich nach dem ersten Start frei setzen.
+   - Ergebnis mit `make package-appimage-verify` prüfen (siehe unten).
+
+   **Warum ein zweiter Build.** Neutrino erfährt seine Datenverzeichnisse beim
+   `configure`: `acinclude.m4` macht aus jedem `--with-*dir` ein String-Literal
+   in der `config.h`. Der Pfad, gegen den gebaut wurde, ist damit der einzige,
+   den das Binary jemals ansieht. Ein Paket aus dem Entwicklerbaum sucht seine
+   Icons, Locales und den Webroot deshalb unterhalb des Verzeichnisses, in dem
+   *du* gebaut hast — und das gibt es auf keinem anderen Rechner.
+
+   Der AppImage-Build wird darum gegen einen neutralen Prefix konfiguriert
+   (`/opt/neutrino`, änderbar über `APPIMAGE_RUNTIME_PREFIX`) und bekommt
+   eigene Build- und Staging-Verzeichnisse. So kann er das Binary, das dein
+   `make run` benutzt, nicht überschreiben. Abhängigkeiten, die von diesem
+   Prefix nicht betroffen sind — libstb-hal, libdvbsi++, ffmpeg, lua — werden
+   aus `artifacts/sysroot` übernommen statt neu gebaut.
+
+   **Wie die Daten zur Laufzeit gefunden werden.** Das erzeugte `AppRun` blendet
+   den mitgelieferten Baum in einem privaten Mount-Namespace auf
+   `/opt/neutrino` ein. Auf dem Dateisystem wird nichts angelegt, und die
+   Einblendung verschwindet mit dem Prozess. Zwei Mounts, weil Neutrino
+   unterhalb desselben Prefix auch schreibt:
+
+   | | Quelle | eingeblendet auf | Modus |
+   |---|---|---|---|
+   | Daten | das AppImage | `/opt/neutrino` als Ganzes | nur lesbar |
+   | Zustand | `${XDG_DATA_HOME:-~/.local/share}/neutrino-appimage` | `/opt/neutrino/usr/var` | beschreibbar, beim ersten Start befüllt |
+
+   Über `NEUTRINO_APPIMAGE_STATE` lassen sich mehrere Konfigurationen trennen
+   oder ein Neuanfang erzwingen.
+
+   `AppRun` braucht einen privaten Mount-Namespace und versucht drei Wege: als
+   Root direkt, sonst über unprivilegierte User-Namespaces, sonst über `bwrap`
+   (Paket `bubblewrap`, hilft auf Ubuntu 24.04, wo AppArmor User-Namespaces
+   einschränkt). Klappt keiner, sagt es das — statt ohne Oberfläche zu starten.
+   Container-Laufzeiten blockieren alle drei; Docker braucht `--privileged`,
+   Root im Container allein genügt nicht.
+
+   Diese Einblendung ist eine Überbrückung, kein Zielzustand. Sie fällt weg,
+   sobald Neutrino seine Datenpfade zur Laufzeit auflöst statt sie einzubacken.
+
+   **Werkzeuge.** `scripts/ensure_appimagetool.sh` legt drei Artefakte in
+   `tools/` ab, jedes auf ein getaggtes Release gepinnt und gegen eine
+   hinterlegte SHA-256 geprüft:
+
+   | Artefakt | wofür |
+   |---|---|
+   | `appimagetool` | packt die AppDir |
+   | `runtime` (type2-runtime) | statisch mit fuse3 gelinkt, dadurch muss auf dem Zielsystem kein `libfuse2` installiert sein |
+   | `linuxdeploy` | sammelt die Bibliotheken ein und wendet dabei die Upstream-Excludelist an |
+
+   Die Excludelist hält `libGL`, `libGLX` und `libGLdispatch` aus dem Paket
+   heraus: das sind die Einstiegspunkte in den Grafiktreiber des Rechners, auf
+   dem das AppImage läuft, und sie mitzuliefern zerstört genau die Systeme, für
+   die sie ausgeschlossen wurden. `libGLEW` und `libglut` kommen mit, ebenso
+   `libfreetype` und `libcom_err`, die die Excludelist verwirft, die Neutrino
+   auf einem Standardsystem aber braucht.
+
+   **GStreamer.** Die Wiedergabe ist der eine Teil, den kein Abhängigkeitslauf
+   findet. GStreamer lädt seine Elemente per `dlopen`, und libstb-hal baut die
+   Pipeline erst beim Abspielen über `gst_element_factory_make("playbin", …)` —
+   ein Paket ohne diese Module startet also einwandfrei, zeigt seine Menüs und
+   spielt dann nichts ab. Sie werden deshalb vollständig vom Buildhost
+   übernommen (`pkg-config --variable=pluginsdir gstreamer-1.0`), zusammen mit
+   den Bibliotheken, die sie brauchen — gemessen ist das der Unterschied
+   zwischen 35 MB und 136 MB.
+   `APPIMAGE_BUNDLE_GSTREAMER=0` baut die kleine Variante, dafür braucht das
+   Zielsystem dann ein eigenes GStreamer.
+
+   Ihre Abhängigkeiten werden berechnet, nicht angenommen. Die Upstream-
+   Excludelist verwirft `libfontconfig`, `libharfbuzz`, `libfribidi` und
+   `libasound` in der Annahme, der Host bringe sie mit; ein unverändertes
+   Debian 13 tut das nicht. Das Ergebnis waren 19 Module, die im Paket lagen und
+   sich nicht laden ließen — darunter `libgstlibav`, also sämtliche
+   `avdec_*`-Decoder und die ALSA-Senke, ohne dass eine Dateiliste das gezeigt
+   hätte. Die Hülle wird deshalb nach dem linuxdeploy-Lauf berechnet, wobei nur
+   übersprungen wird, was zwingend vom Rechner selbst kommen muss.
+
+   Vier Sorten Modul fliegen sofort wieder raus. `va`, `vaapi`, `vdpau` und
+   `nvcodec` geben das Dekodieren an den Grafiktreiber des Hosts weiter — aus
+   demselben Grund, aus dem `libGL` nicht mitkommt. `gtk`, `gtkwayland` und
+   `onnx` erfüllen Zwecke, die Neutrino nicht hat, und zogen GTK 3 sowie eine
+   ML-Laufzeit nach. Alles andere bleibt: welchen Demuxer ein Stream braucht,
+   entscheidet sich zur Laufzeit, und eine handverlesene Liste wäre für
+   irgendjemandes Medien bald falsch.
+
+   Eine abweichende Prüfsumme lässt den Build scheitern. Das ist Absicht: sie
+   bedeutet, dass sich das gepinnte Upstream-Artefakt geändert hat, und das
+   gehört angesehen, bevor die Prüfsumme in
+   `scripts/ensure_appimagetool.sh` nachgezogen wird.
+
+   `APPIMAGE_TOOL` auf ein eigenes Executable setzen, um das gepinnte
+   appimagetool zu umgehen, etwa zum Testen anderer Werkzeuge.
 
 2. **Debian-Paket (`make package-deb`)**
    - Generiert eine minimalistische `DEBIAN/control`-Datei und ein `postinst`-Skript mit Root-Hinweisen.
@@ -54,12 +125,120 @@ Diese Umgebung unterstützt drei Paketarten:
 - Vor dem Paketieren mindestens einmal `make neutrino` ausführen, damit das Sysroot `artifacts/sysroot` gefüllt ist.  
   Für statische Bundles zusätzlich `make neutrino-static` starten.
 - Prüfen, ob alle benötigten Tools installiert sind:
-  - `appimagetool` (wird bei Bedarf durch `scripts/ensure_appimagetool.sh` heruntergeladen) plus FUSE (`libfuse2`) für AppImage.
+  - `chrpath` oder `patchelf` für AppImage-Builds. Der Linker trägt das
+    Staging-Verzeichnis als `RUNPATH` ein; ohne eines der beiden würde das
+    Paket den Rechner benennen, auf dem es gebaut wurde, und der Build bricht
+    deshalb ab.
+  - `docker`, wenn `make package-appimage-verify` das Paket auf einem sauberen
+    System starten soll. Die Werkzeuge selbst (`appimagetool`, der Runtime und
+    `linuxdeploy`) holt `scripts/ensure_appimagetool.sh`; `libfuse2` muss weder
+    auf dem Build-Host noch auf dem Zielsystem installiert sein. Fehlt auf dem
+    Ziel jedes `fusermount`, erscheint zuerst eine Zeile, die mit `Error:`
+    beginnt, danach entpackt sich das AppImage selbst und läuft trotzdem.
   - `dpkg-deb` (Teil von `dpkg-dev`) für Debian-Pakete.
 - `python3` für `scripts/version_info.sh` (wird durch `make deps` bereitgestellt).
 - Die Make-Targets selbst benötigen keine Root-Rechte; Installation/Entpacken der Artefakte üblicherweise schon.
 - Alle Formate in einem Rutsch bauen: `make package-appimage package-deb package-static`.
 Hinweis: Die früheren Container-Workflows sind entfernt; alle Targets laufen direkt auf dem Host.
+
+## AppImage prüfen
+
+```bash
+make package-appimage-verify
+```
+
+`ldd` auf dem Build-Rechner beweist nichts, weil dort jede Abhängigkeit
+installiert ist. Genau deshalb sah das Paket lange in Ordnung aus, obwohl es
+gar keine Daten enthielt. Geprüft wird darum das fertige Artefakt, und danach
+wird es auf einem System gestartet, das Neutrino nie gebaut hat:
+
+- Das Binary sucht seine Daten unterhalb des Prefix, den das Paket auch
+  mitbringt — ein Entwicklerbuild kann so nicht versehentlich paketiert werden.
+- Kein Pfad des Build-Rechners überlebt — weder im Binary, noch im `RUNPATH`,
+  noch in irgendeiner anderen mitgelieferten Datei. Eine dokumentierte Ausnahme:
+  LuaJIT wird mit `PREFIX` auf das Staging-Verzeichnis gebaut statt mit `/usr`
+  plus `DESTDIR`, sein eingebackener Modulsuchpfad nennt also den Build-Rechner.
+  `AppRun` setzt `LUA_PATH` und `LUA_CPATH`, damit dieser Standard nie benutzt
+  wird; den String selbst loszuwerden hieße zu ändern, wie LuaJIT gebaut wird,
+  und das verschöbe den Modulpfad auch für den Entwicklerbau.
+- Icons, Locales, Webroot, Schriften und die Konfigurationsvorlage sind da.
+- Keine Bibliothek der libGL-Familie und kein Teil der C-Laufzeit ist
+  gebündelt, jede mitgelieferte Bibliothek passt zur Architektur des Binaries,
+  und die Bibliotheken, die der Host nicht mitbringt, sind da. `libva`,
+  `libva-drm`, `libva-x11`, `libvdpau` und `libwayland-egl` kommen mit: das
+  Host-`libavcodec`, das `libgstlibav` braucht, führt sie in `DT_NEEDED`, und
+  sie wegzulassen kostet jeden `avdec_*`-Decoder. Anders als `libGL` scheitern
+  sie weich und fallen auf Software-Dekodierung zurück. Über X11- und
+  Wayland-Client-Bibliotheken entscheidet die Upstream-Excludelist, weshalb
+  einige davon mitkommen — sie sind Protokollbibliotheken, keine
+  Treiber-Einstiegspunkte.
+- Auf einem unveränderten `debian:13` — bevor irgendetwas installiert wird —
+  sind die einzigen Bibliotheken, die das Paket nicht auflösen kann, der
+  Grafik-Stack, den es bewusst nicht mitliefert. Dieser Durchlauf macht die
+  Host-Anforderung weiter unten zu einer gemessenen Zahl statt zu einer
+  Behauptung: eine Bibliothek, die gebündelt gehört und fehlt, fällt hier auf —
+  auf dem Build-Host niemals.
+- Erst danach startet es in diesem Container mit der dokumentierten
+  Host-Anforderung, **parst** seine mitgelieferte Schrift aus dem
+  eingeblendeten Prefix und liest sein Locale. Der Beweis muss aus einer Zeile
+  kommen, die *nach* dem Öffnen der Datei gedruckt wird: Neutrino gibt
+  `font file: <Pfad>` aus einer Compile-Zeit-Konstante aus, *bevor* es
+  `access()` aufruft — wer auf diese Zeile prüft, lässt ein Paket mit leerem
+  Datenbaum durch, und genau das ist einmal passiert.
+- Es legt eine benutzereigene Konfiguration aus den mitgelieferten Vorgaben an.
+- Jedes gebündelte GStreamer-Modul wird auf diesem sauberen System auf
+  unaufgelöste Bibliotheken geprüft, und eine eigens gebaute Sonde bestätigt,
+  dass daraus noch ein `playbin` entsteht. Die Dateien aufzuzählen beantwortet
+  weder das eine noch das andere: ein Modul, dessen eigene Abhängigkeit fehlt,
+  ist gleichzeitig vorhanden und nicht ladbar.
+
+`APPIMAGE_VERIFY_CONTAINER=0` beschränkt das auf die statischen Prüfungen. Diese
+statischen Prüfungen werden ihrerseits offline getestet, von
+`tests/shell/test_appimage_verify.sh`: jede Assertion dort zerstört eine
+Eigenschaft eines bekannt guten Pakets und verlangt, dass das Gate sie benennt —
+denn eine Prüfung, die nicht fehlschlagen kann, ist der Fehler, den dieses Gate
+zweimal hatte. Die andere Hälfte, die AppRun-Abbildung und die
+Bibliotheks-Politik in `gen_appimage.sh`, deckt
+`tests/shell/test_appimage_bridge.sh` ab. Beide laufen als Teil von
+`make test-shell`.
+
+## Was das Paket auf dem Zielsystem braucht
+
+Das AppImage wird gegen die C-Bibliothek des Build-Hosts gebaut und läuft nicht
+auf einer Maschine mit einer älteren. Gemessen auf dem aktuellen Debian-13-Build-
+Host liegt die Untergrenze bei **glibc 2.39, GLIBCXX 3.4.32 und CXXABI
+1.3.15**: Ubuntu 24.04 und Fedora 41 laufen, Debian 12 und Ubuntu 22.04 nicht
+(`version GLIBC_2.38 not found`). Das Binary allein käme mit 2.38 aus — das
+mitgelieferte `libsystemd` hebt die Grenze an. `make package-appimage-verify`
+misst deshalb das gesamte Paket gegen diese Zahl und schlägt fehl, wenn ein
+neuerer Build-Host sie nach oben schiebt.
+
+Diese Grenze ist eine Eigenschaft des Build-Hosts, nicht des Codes — auf einer
+älteren Basis zu bauen senkt sie für alle.
+
+Neben der C-Bibliothek muss das Zielsystem **den OpenGL- und X11-Stack**
+mitbringen: `libgl1` auf Debian und Ubuntu (zieht `libX11` mit), `mesa-libGL`
+plus `libglvnd-glx` auf Fedora. Das ist die direkte Folge daraus, die
+Grafikbibliotheken nicht zu bündeln — sie sprechen mit dem Treiber der Maschine,
+und eine mitgelieferte Kopie ist der klassische Weg, ein AppImage genau auf den
+Systemen scheitern zu lassen, für die es gedacht war. Ein unveränderter
+`debian:13` bleibt deshalb mit `libGL.so.1: cannot open shared object file`
+stehen, und `make package-appimage-verify` misst diese Menge bei jedem Lauf, so
+dass die Liste nicht unbemerkt wachsen kann.
+
+Darüber hinaus nichts: kein `libfuse2`, kein GStreamer, keine
+Build-Abhängigkeiten von Neutrino. Fehlt auf dem Ziel jedes `fusermount`,
+erscheint eine Zeile mit `Error:`, danach entpackt sich das Paket selbst und
+läuft.
+
+Die Weboberfläche des Pakets ist auf **Port 80** konfiguriert, nicht auf den
+31344, den `NEUTRINO_WEB_PORT` für den Entwicklerbau setzt: die mitgelieferte
+`nhttpd.conf` trägt Neutrinos eigenen Standard. Port 80 verlangt Rechte, die ein
+gewöhnlicher Benutzer nicht hat — ein rootloser Lauf weicht deshalb auf 8080 aus
+und bricht den Webserver ab, wenn auch der belegt ist. Für einen rootlosen
+Betrieb `WebsiteMain.port` in
+`~/.local/share/neutrino-appimage/tuxbox/config/nhttpd.conf` nach dem ersten
+Start auf einen Port über 1024 setzen.
 
 ## Wichtige Variablen
 
@@ -67,8 +246,14 @@ Alle Werte lassen sich inline (`make PACKAGE_VERSION=3.30.0 package-deb`) oder d
 
 | Variable | Standard | Verwendet von | Wirkung |
 | --- | --- | --- | --- |
-| `APPIMAGE_TOOL` | `appimagetool` | AppImage | Pfad/Name des AppImage-Generators. |
+| `APPIMAGE_TOOL` | nicht gesetzt | AppImage | Executable, das statt des gepinnten appimagetool benutzt wird. Für reproduzierbare Pakete leer lassen. |
 | `APPIMAGE_OUTPUT_DIR` | `artifacts/appimage` | AppImage | Zielordner für erzeugte AppImage-Dateien. |
+| `APPIMAGE_RUNTIME_PREFIX` | `/opt/neutrino` | AppImage | Prefix, gegen den das paketierte Neutrino gebaut wird und den AppRun zur Laufzeit einblendet. |
+| `APPIMAGE_BUILD_DIR` | `build/neutrino-appimage` | AppImage | Build-Verzeichnis der Paketvariante, getrennt vom Entwicklerbuild. |
+| `APPIMAGE_SYSROOT` | `artifacts/sysroot-appimage` | AppImage | Staging-Baum der Paketvariante. |
+| `NEUTRINO_APPIMAGE_STATE` | `${XDG_DATA_HOME:-~/.local/share}/neutrino-appimage` | AppImage (Laufzeit) | Wo das fertige Paket seine Konfiguration ablegt. Wird von AppRun gelesen, nicht vom Build. |
+| `APPIMAGE_VERIFY_IMAGE` | `debian:13` | Verifikation | Container-Image, in dem das Paket gestartet wird. |
+| `APPIMAGE_VERIFY_CONTAINER` | `1` | Verifikation | Auf `0` setzen, um nur die statischen Prüfungen zu fahren. |
 | `NEUTRINO_NAME` | `Neutrino` | AppImage | Basisname für `Neutrino_<version>_<arch>.AppImage`. |
 | `PACKAGE_NAME` | `neutrino-generic-pc` | Debian | Paketname (`Package:`-Feld und Dateiname). |
 | `PACKAGE_VERSION` | aus Git abgeleitet | Debian | Versionsstring; für Releases überschreiben (z. B. `PACKAGE_VERSION=3.30.0`). |
@@ -76,7 +261,7 @@ Alle Werte lassen sich inline (`make PACKAGE_VERSION=3.30.0 package-deb`) oder d
 | `STATIC_OUTPUT_DIR` | `artifacts/static` | Statisch | Zielordner für statische Tarballs. |
 | `NEUTRINO_INSTALL_DIR` | `artifacts/sysroot` | AppImage / Debian | Sysroot, das in die Pakete/AppDir kopiert wird. |
 | `NEUTRINO_INSTALL_DIR_STATIC` | `artifacts/sysroot-static` | Statisch | Installationsbaum aus `make neutrino-static`. |
-| `NEUTRINO_PREFIX` | `/usr` | Alle | Prefix innerhalb des Pakets/AppImage (z. B. `/opt/neutrino`). |
+| `NEUTRINO_PREFIX` | `/usr` | Alle | Prefix für Binary und Bibliotheken im Paket. Nicht der Datenprefix — das ist `APPIMAGE_RUNTIME_PREFIX`. |
 
 Tipp für automatisierte Releases:
 

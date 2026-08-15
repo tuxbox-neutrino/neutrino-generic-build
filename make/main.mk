@@ -139,6 +139,7 @@ help:
 	@echo ""
 	@echo "Pakete"
 	@echo "  package-appimage  : AppImage erstellen (setzt erfolgreichen Build voraus)"
+	@echo "  package-appimage-verify : AppImage auf einem sauberen System starten und prüfen"
 	@echo "  package-deb       : Debian-Paket erzeugen"
 	@echo "  package-static    : Statisches Tarball-Bundle schreiben"
 	@echo ""

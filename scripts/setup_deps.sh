@@ -99,11 +99,15 @@ CORE_PACKAGES_APT+=("${NEUTRINO_DEPS_APT[@]}")
 # no `|| true`, and the longer RUNPATH is not always writable ("new rpath too
 # large"), which aborts the recipe. Listing it -- in either list -- would make
 # `make deps` install it and turn a harmless skip into a build failure.
+# patchelf does the same job for the AppImage build and is not affected: nothing
+# outside gen_appimage.sh calls it, and gen_appimage.sh refuses to package
+# without one of the two, so without this entry the documented AppImage flow
+# fails immediately after a plain `make deps`.
 OPTIONAL_PACKAGES_APT=(
   python3-opencv python3-numpy tesseract-ocr libleptonica-dev
   xvfb x11-apps fbcat netpbm fonts-dejavu-core
   libevdev-dev evtest proot libfuse2
-  appstream file desktop-file-utils squashfs-tools
+  appstream file desktop-file-utils squashfs-tools patchelf
 )
 
 ENABLE_GSTREAMER="${ENABLE_GSTREAMER:-0}"

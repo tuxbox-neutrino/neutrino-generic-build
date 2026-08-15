@@ -18,6 +18,14 @@ NEUTRINO_LUA_FLAVOR ?= luajit
 NEUTRINO_WEB_PORT ?= 31344
 NEUTRINO_WEB_HOST ?= 0.0.0.0
 
+# Whether the install step also mirrors the staged tree into
+# NEUTRINO_RUNTIME_PREFIX so that "make run" finds it. That mirror is a
+# developer convenience and writes to an absolute host path, so any build that
+# bakes a foreign prefix into the binary (the AppImage variant below) has to
+# switch it off -- otherwise the install would try to populate /opt/neutrino on
+# the build machine and fail without root.
+NEUTRINO_STAGE_RUNTIME ?= 1
+
 # On the box Neutrino signals its follow-up action (poweroff/reboot/restart)
 # through the process exit status; that trips "set -e" and make on the PC. Ask
 # Neutrino for POSIX exit codes here (clean shutdown => 0) and read the action
@@ -41,6 +49,11 @@ NEUTRINO_WARN_OPTS ?= -Wall -Wextra -Wsign-compare -Wno-psabi -Wunused-parameter
 NEUTRINO_WARN_OPTS_CXX ?= -Wno-class-memaccess
 NEUTRINO_CFLAGS_APPEND ?=
 NEUTRINO_CXXFLAGS_APPEND ?=
+# Compiler options that must not end up in Neutrino's recorded build flags.
+# Neutrino's configure copies CXXFLAGS verbatim into USED_CXXFLAGS, which the
+# GUI shows and which therefore ships inside the binary; CPPFLAGS is not
+# recorded, so options that only matter to the build belong here.
+NEUTRINO_CPPFLAGS_APPEND ?=
 NEUTRINO_GDB_AUTORUN ?= 1
 NEUTRINO_GDB_COMMANDS ?=
 

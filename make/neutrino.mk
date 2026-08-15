@@ -276,7 +276,7 @@ $(NEUTRINO_CONFIGURE_STAMP): $(NEUTRINO_SOURCE_STAMP) $(NEUTRINO_PATCH_STAMP) $(
 	@cd $(NEUTRINO_BUILD_DIR) && \
 		CFLAGS="$(NEUTRINO_CFLAGS_ALL)" \
 		CXXFLAGS="$(NEUTRINO_CXXFLAGS_ALL)" \
-		CPPFLAGS="$(CPPFLAGS) -I$(STB_HAL_INCLUDE_DIR) -I$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)/include" \
+		CPPFLAGS="$(CPPFLAGS) -I$(STB_HAL_INCLUDE_DIR) -I$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)/include $(NEUTRINO_CPPFLAGS_APPEND)" \
 		LDFLAGS="$(LDFLAGS) -L$(STB_HAL_LIBRARY_DIR)" \
 		PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) \
 		$(NEUTRINO_SRC_DIR)/configure \
@@ -312,6 +312,7 @@ FORCE:
 $(NEUTRINO_INSTALL_STAMP): $(NEUTRINO_BUILD_STAMP)
 	@echo "[neutrino] Installing into $(NEUTRINO_INSTALL_DIR)"
 	@$(MAKE) -C $(NEUTRINO_BUILD_DIR) install DESTDIR=$(NEUTRINO_INSTALL_DIR)
+ifeq ($(NEUTRINO_STAGE_RUNTIME),1)
 	@$(MKDIR_P) "$(NEUTRINO_RUNTIME_PREFIX_ABS)/usr"
 	@# The webroot is owned by the staged-install overlay below. This sync
 	@# carries --delete and no longer has a copy of it on the sending side,
@@ -333,6 +334,7 @@ $(NEUTRINO_INSTALL_STAMP): $(NEUTRINO_BUILD_STAMP)
 	if [ -d "$$yweb_src" ] && [ -d "$$yweb_rt" ]; then \
 		rsync -a --no-owner --no-group "$$yweb_src/" "$$yweb_rt/"; \
 	fi
+endif
 	@touch $@
 	@echo "[neutrino] Build complete."
 	@echo "[neutrino] Launch Neutrino with 'make run' (systemd-nspawn) or for direct host tests use 'ALLOW_NON_ROOT=1 make run-now'."
@@ -346,7 +348,7 @@ $(NEUTRINO_STATIC_STAMP): $(NEUTRINO_SOURCE_STAMP) $(NEUTRINO_PATCH_STAMP) $(LIB
 	@cd $(NEUTRINO_BUILD_DIR_STATIC) && \
 		CFLAGS="$(NEUTRINO_CFLAGS_ALL)" \
 		CXXFLAGS="$(NEUTRINO_CXXFLAGS_ALL)" \
-		CPPFLAGS="$(CPPFLAGS) -I$(STB_HAL_INCLUDE_DIR) -I$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)/include" \
+		CPPFLAGS="$(CPPFLAGS) -I$(STB_HAL_INCLUDE_DIR) -I$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)/include $(NEUTRINO_CPPFLAGS_APPEND)" \
 		LDFLAGS="$(LDFLAGS) -L$(STB_HAL_LIBRARY_DIR)" \
 		PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) \
 		$(NEUTRINO_SRC_DIR)/configure \
