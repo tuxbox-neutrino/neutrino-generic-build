@@ -102,7 +102,9 @@ CORE_PACKAGES_APT+=("${NEUTRINO_DEPS_APT[@]}")
 # patchelf does the same job for the AppImage build and is not affected: nothing
 # outside gen_appimage.sh calls it, and gen_appimage.sh refuses to package
 # without one of the two, so without this entry the documented AppImage flow
-# fails immediately after a plain `make deps`.
+# fails immediately after a plain `make deps`. It belongs in *both* lists -- an
+# apt-only entry left Fedora without it, and the AppImage suite failed there
+# while passing on every Debian and Ubuntu image in the same CI run.
 OPTIONAL_PACKAGES_APT=(
   python3-opencv python3-numpy tesseract-ocr libleptonica-dev
   xvfb x11-apps fbcat netpbm fonts-dejavu-core
@@ -141,7 +143,7 @@ OPTIONAL_PACKAGES_DNF=(
   opencv opencv-devel tesseract tesseract-devel leptonica-devel
   xorg-x11-server-Xvfb netpbm-progs dejavu-sans-fonts
   libevdev-devel evtest fuse fuse-libs
-  appstream file desktop-file-utils squashfs-tools
+  appstream file desktop-file-utils squashfs-tools patchelf
 )
 
 if [[ "${ENABLE_GSTREAMER}" == "1" ]]; then
