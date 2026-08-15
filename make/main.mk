@@ -39,6 +39,8 @@ include make/third_party.mk
 include make/neutrino.mk
 include make/plugins.mk
 include make/lua.mk
+include make/web.mk
+include make/yweb.mk
 include make/hosttools.mk
 
 # Late hook for project-specific TARGETS that must reference something defined by
