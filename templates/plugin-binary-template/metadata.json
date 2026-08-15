@@ -1,0 +1,31 @@
+{
+  "name": "my-binary-plugin",
+  "version": "1.0.0",
+  "description": "Template for a Neutrino Native Binary Plugin - replace with your description",
+  "author": "Your Name <your.email@example.com>",
+  "license": "GPL-2.0-or-later",
+  "type": "native",
+  "library": "my-binary-plugin.so",
+  "neutrino_min_version": "3.2.0",
+  "homepage": "https://github.com/yourusername/plugin-bin-my-binary-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/plugin-bin-my-binary-plugin.git"
+  },
+  "keywords": [
+    "neutrino",
+    "plugin",
+    "native",
+    "binary",
+    "template"
+  ],
+  "build": {
+    "type": "make",
+    "requires": [
+      "gcc",
+      "g++",
+      "make",
+      "pkg-config"
+    ]
+  }
+}

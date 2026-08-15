@@ -1,0 +1,3 @@
+PLUGIN_INSTALL_NAMES += FritzInfoMonitor
+PLUGIN_INSTALL_RULES += FritzInfoMonitor:fritzinfo-install
+PLUGIN_INSTALL_ALIAS_PAIRS += FritzInfoMonitor:FritzInfoMonitor fritzinfomonitor:FritzInfoMonitor fritzinfo:FritzInfoMonitor

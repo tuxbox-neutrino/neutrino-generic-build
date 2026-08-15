@@ -1,0 +1,3 @@
+PLUGIN_INSTALL_NAMES += FritzCallMonitor
+PLUGIN_INSTALL_RULES += FritzCallMonitor:fritzcall-install
+PLUGIN_INSTALL_ALIAS_PAIRS += FritzCallMonitor:FritzCallMonitor fritzcallmonitor:FritzCallMonitor fritzcall:FritzCallMonitor

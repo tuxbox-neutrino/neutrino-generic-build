@@ -1,0 +1,25 @@
+{
+  "name": "my-plugin",
+  "version": "1.0.0",
+  "description": "Template for a Neutrino Lua Plugin - replace with your description",
+  "author": "Your Name <your.email@example.com>",
+  "license": "GPL-2.0-or-later",
+  "type": "lua",
+  "dependencies": [
+    "json",
+    "n_gui",
+    "posix"
+  ],
+  "neutrino_min_version": "3.2.0",
+  "homepage": "https://github.com/yourusername/plugin-lua-my-plugin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/plugin-lua-my-plugin.git"
+  },
+  "keywords": [
+    "neutrino",
+    "plugin",
+    "lua",
+    "template"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "my-tool",
+  "version": "1.0.0",
+  "description": "Template for a Standalone Plugin Tool - replace with your description",
+  "author": "Your Name <your.email@example.com>",
+  "license": "GPL-2.0-or-later",
+  "type": "standalone",
+  "executable": "my-tool",
+  "neutrino_min_version": "3.2.0",
+  "homepage": "https://github.com/yourusername/my-tool",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/my-tool.git"
+  },
+  "keywords": [
+    "neutrino",
+    "plugin",
+    "standalone",
+    "tool",
+    "template"
+  ],
+  "build": {
+    "type": "make",
+    "requires": [
+      "gcc",
+      "make"
+    ]
+  },
+  "install": {
+    "binary": "/usr/bin/my-tool",
+    "data": "/usr/share/tuxbox/neutrino/luaplugins/my-tool/"
+  }
+}

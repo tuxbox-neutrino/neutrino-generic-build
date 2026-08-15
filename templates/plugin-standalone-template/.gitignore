@@ -1,0 +1,53 @@
+# Compiled binaries
+my-tool
+*.o
+*.a
+
+# Build artifacts
+.deps/
+*.d
+
+# Autotools (if converted)
+autom4te.cache/
+config.h
+config.h.in
+config.log
+config.status
+configure
+Makefile.in
+aclocal.m4
+compile
+depcomp
+install-sh
+missing
+stamp-h1
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+.*.swp
+.*.swo
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Build directories
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Logs
+*.log
+
+# Core dumps
+core
+core.*

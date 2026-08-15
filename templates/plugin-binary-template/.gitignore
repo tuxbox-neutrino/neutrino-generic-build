@@ -1,0 +1,38 @@
+# Compiled object files
+*.o
+*.so
+*.a
+
+# Build artifacts
+*.d
+.deps/
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Editor temporary files
+*~
+*.swp
+*.swo
+.*.swp
+.*.swo
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Build directories
+dist/
+build/
+*.tar.gz
+*.zip
+
+# Logs
+*.log
+
+# Core dumps
+core
+core.*

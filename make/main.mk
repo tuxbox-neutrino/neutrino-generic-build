@@ -37,6 +37,7 @@ include make/toolchain.mk
 include make/deps.mk
 include make/third_party.mk
 include make/neutrino.mk
+include make/plugins.mk
 include make/lua.mk
 include make/hosttools.mk
 
