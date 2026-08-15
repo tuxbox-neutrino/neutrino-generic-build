@@ -40,6 +40,21 @@ fi
 PREFIX=/opt/neutrino
 if [ -e "$PREFIX" ]; then prefix_existed_before=yes; else prefix_existed_before=no; fi
 
+# gen_appimage.sh derives the package version from the Neutrino source tree, and
+# scripts/version_info.sh exits if it is not there. A CI checkout of this repo
+# alone has no sources/neutrino, so every assertion that reaches gen_appimage.sh
+# failed there while passing on any developer machine -- which is precisely the
+# blind spot a unit test is supposed to close. version_info.sh honours SRC_DIR,
+# so point it at the three defines it actually reads. Nothing else about the
+# real source tree matters here; the version only names the output file.
+FAKE_SRC="$WORK/fake-src"
+mkdir -p "$FAKE_SRC"
+cat > "$FAKE_SRC/configure.ac" <<'ACSRC'
+define(ver_major, 2026)
+define(ver_minor, 8)
+define(ver_micro, 0)
+ACSRC
+
 # The stand-in has to be a real ELF with a RUNPATH: the packaging step rewrites
 # that RUNPATH, and a shell script would not exercise it.
 # CC arrives from the environment under "make test-shell", where it can be a
@@ -133,6 +148,7 @@ run_gen() {
 	# and which no CI runner has. Without this the whole file fails on every CI
 	# job for a reason that has nothing to do with what it tests.
 	( cd "$ROOT_DIR" && \
+		SRC_DIR="$FAKE_SRC" \
 		NEUTRINO_INSTALL_DIR="$1" \
 		APPIMAGE_OUTPUT_DIR="$2" \
 		NEUTRINO_APPIMAGE_PREFIX="$3" \

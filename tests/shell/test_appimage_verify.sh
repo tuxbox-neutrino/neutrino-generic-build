@@ -152,7 +152,20 @@ if ! build_sysroot "$WORK/sysroot"; then
 	exit 1
 fi
 
+# scripts/version_info.sh exits when the Neutrino source tree is absent, which
+# is the normal state of a CI checkout of this repo alone. It honours SRC_DIR,
+# and the version it derives only names the output file, so the three defines it
+# reads are enough.
+FAKE_SRC="$WORK/fake-src"
+mkdir -p "$FAKE_SRC"
+cat > "$FAKE_SRC/configure.ac" <<'ACSRC'
+define(ver_major, 2026)
+define(ver_minor, 8)
+define(ver_micro, 0)
+ACSRC
+
 ( cd "$ROOT_DIR" && \
+	SRC_DIR="$FAKE_SRC" \
 	NEUTRINO_INSTALL_DIR="$WORK/sysroot" \
 	APPIMAGE_OUTPUT_DIR="$WORK/out" \
 	NEUTRINO_APPIMAGE_PREFIX="$PREFIX" \
