@@ -437,7 +437,27 @@ case "${MODE}" in
       PACKAGES=("${!PACKAGES_VAR}")
       CORE_PACKAGES=("${!CORE_VAR}")
       OPTIONAL_PACKAGES=("${!OPTIONAL_VAR}")
+      # Installing needs root. As an ordinary user the packages are only
+      # reported: reaching for sudo on somebody's workstation is not this
+      # script's decision to make, and that is why SUDO_BIN was computed above
+      # and never used. A host that has already decided says so explicitly with
+      # DEPS_ALLOW_SUDO=1 -- which is what CI does on a runner, where the only
+      # alternative is copying the whole package list into a workflow file, and
+      # hand-copied lists are precisely what goes stale.
+      DEPS_CAN_INSTALL=0
       if [[ "${EUID}" -eq 0 ]]; then
+        DEPS_CAN_INSTALL=1
+      elif [[ "${DEPS_ALLOW_SUDO:-0}" == "1" ]]; then
+        if sudo -n true 2>/dev/null; then
+          DEPS_CAN_INSTALL=1
+        else
+          echo "[deps] DEPS_ALLOW_SUDO=1 gesetzt, aber sudo verlangt ein Passwort." \
+            | tee -a "${LOG_FILE}"
+          echo "[deps] DEPS_ALLOW_SUDO=1 is set, but sudo asks for a password;" \
+            "nothing was installed." | tee -a "${LOG_FILE}"
+        fi
+      fi
+      if [[ "${DEPS_CAN_INSTALL}" -eq 1 ]]; then
         # Two transactions on purpose: a single unavailable OPTIONAL package
         # (e.g. libfuse2 renamed to libfuse2t64) would otherwise abort the whole
         # installation under `set -e` and take the core packages with it.
@@ -460,9 +480,9 @@ case "${MODE}" in
           echo "         $(install_hint "${PM}" "${MISSING_OPTIONAL[@]}")"
         } | tee -a "${LOG_FILE}"
       fi
-      # Verify instead of assuming: as root the install above may have failed
-      # partially, and without root nothing was installed at all. Either way the
-      # build must not continue on an incomplete host.
+      # Verify instead of assuming: an install may have failed partially, and
+      # where none was attempted nothing is there at all. Either way the build
+      # must not continue on an incomplete host.
       if [[ "${SKIP_DEP_CHECK:-0}" == "1" ]]; then
         echo "[deps] SKIP_DEP_CHECK=1 gesetzt - Voraussetzungspruefung uebersprungen." | tee -a "${LOG_FILE}"
       elif ! require_prerequisites "${PM}" "${CORE_PACKAGES[@]}" 2>&1 | tee -a "${LOG_FILE}"; then

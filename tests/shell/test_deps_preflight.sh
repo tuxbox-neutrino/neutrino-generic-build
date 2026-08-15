@@ -209,6 +209,69 @@ case "$probe5_out" in
 	*) ko "dnf core uses the real pkgconf-pkg-config rpm name" "pkgconf-pkg-config missing: $probe5_out" ;;
 esac
 
+# ------------------------------------------------- installing as a normal user
+# Packages are installed only as root, so on an unattended host that is not root
+# `make deps` reported everything as missing and stopped -- which is how the CI
+# packaging job failed before it compiled a line. Reaching for sudo unasked is
+# still wrong on somebody's workstation, so the opt-in has to be explicit and,
+# more importantly, has to have no effect when it was not given.
+#
+# Driven through stubs on PATH: nothing here may install anything for real. The
+# stubbed dpkg-query reports every package as absent, so the run stops at the
+# verification step either way and the only difference left to observe is
+# whether an installation was attempted at all.
+stub_run() { # $1 = value for DEPS_ALLOW_SUDO ("" leaves it unset)
+	stub="$WORK/stub"
+	rm -rf "$stub"
+	mkdir -p "$stub"
+	: > "$WORK/apt-calls"
+	cat > "$stub/apt-get" <<STUB
+#!/bin/sh
+echo "\$@" >> "$WORK/apt-calls"
+exit 0
+STUB
+	cat > "$stub/sudo" <<'STUB'
+#!/bin/sh
+[ "$1" = "-n" ] && shift
+[ "$1" = "true" ] && exit 0
+exec "$@"
+STUB
+	# Everything absent, so the preflight refuses and create_venv is never
+	# reached -- this test must not build a virtualenv.
+	printf '#!/bin/sh\nexit 1\n' > "$stub/dpkg-query"
+	printf '#!/bin/sh\nexit 1\n' > "$stub/apt-cache"
+	chmod +x "$stub/apt-get" "$stub/sudo" "$stub/dpkg-query" "$stub/apt-cache"
+	if [ -n "$1" ]; then
+		DEPS_ALLOW_SUDO="$1" PATH="$stub:$PATH" VENV_DIR="$WORK/venv-stub" \
+			LOG_FILE="$WORK/deps-stub.log" "$BASH_BIN" "$SCRIPT" >/dev/null 2>&1
+	else
+		PATH="$stub:$PATH" VENV_DIR="$WORK/venv-stub" \
+			LOG_FILE="$WORK/deps-stub.log" "$BASH_BIN" "$SCRIPT" >/dev/null 2>&1
+	fi
+	cat "$WORK/apt-calls" 2>/dev/null
+}
+
+if [ "$(id -u)" = 0 ]; then
+	# As root the install path is taken regardless, so the opt-in cannot be
+	# observed. Skipping would hide that, so say it plainly instead.
+	printf 'ok   sudo opt-in not exercised (running as root, installs unconditionally)\n'
+	pass=$((pass + 1))
+else
+	calls_without="$(stub_run "")"
+	case "$calls_without" in
+		"") ok "without DEPS_ALLOW_SUDO nothing is installed" ;;
+		*) ko "without DEPS_ALLOW_SUDO nothing is installed" \
+			"apt-get was called: $calls_without" ;;
+	esac
+
+	calls_with="$(stub_run 1)"
+	case "$calls_with" in
+		*install*) ok "DEPS_ALLOW_SUDO=1 installs through sudo" ;;
+		*) ko "DEPS_ALLOW_SUDO=1 installs through sudo" \
+			"apt-get install was never reached: ${calls_with:-<nothing>}" ;;
+	esac
+fi
+
 # --------------------------------------------------------------- summary
 printf -- '----\n'
 printf '[test-deps-preflight] pass=%s fail=%s\n' "$pass" "$fail"

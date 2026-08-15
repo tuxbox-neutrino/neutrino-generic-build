@@ -167,8 +167,13 @@ jobs:
             && echo "userns+mount namespace: usable" \
             || echo "userns+mount namespace: DENIED"
           df -h / | tail -n1
+      # DEPS_ALLOW_SUDO because this job, unlike the container ones, does not run
+      # as root: setup_deps.sh reports the missing packages instead of
+      # installing them, which is right on a workstation and stops a runner
+      # dead. Naming the packages here instead would duplicate a list that is
+      # already maintained in one place.
       - name: Bootstrap (deps, ffmpeg, libstb-hal, neutrino)
-        run: make bootstrap
+        run: DEPS_ALLOW_SUDO=1 make bootstrap
       - name: Build the AppImage
         run: make package-appimage
       - name: Verify the AppImage
