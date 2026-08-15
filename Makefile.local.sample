@@ -1,0 +1,234 @@
+# Makefile.local.sample
+# ----------------------
+# Copy this file to "Makefile.local" when you need to override build variables or add
+# project-specific targets. It is read once, after the build defaults and before
+# everything that derives values from them. An override here therefore reaches
+# the toolchain selection and the derived sysroot paths (PKG_CONFIG_PATH etc.),
+# while a dependent override such as `N_PLUGIN_DIR := $(N_PREFIX)/oem/plugins`
+# can still reference a default. Overriding ROOT_DIR moves all the derived
+# directories with it. The default goal stays `help`, so a target defined here
+# does not silently become what a bare `make` runs.
+#
+# Because this file is read early, a custom TARGET here can call core targets via
+# `$(MAKE) <target>` but cannot list a variable defined by a later module as a
+# prerequisite. Put such late-binding targets in "Makefile.local.post" instead,
+# which is read after every module (e.g. `my-build: $(NEUTRINO_INSTALL_STAMP)`).
+# Every entry below is commented out – remove the leading "#" to activate the line.
+
+###############################
+#  General build parameters   #
+###############################
+
+#ALLOW_NON_ROOT := 1
+#  Relax root requirements for selected targets such as `make deps` or `make run-now`.
+#  Default is 0 (root erforderlich). `make run` bevorzugt systemd-nspawn; mit ALLOW_NON_ROOT=1
+#  fällt es auf proot zurück, wenn verfügbar (ansonsten Host-Wrapper).
+
+#MAKE_JOBS := 8
+#  Fixed number of parallel jobs. By default the CPU count is detected automatically.
+
+#NEUTRINO_BRANCH := master
+#NEUTRINO_GIT_URL := https://github.com/tuxbox-neutrino/gui-neutrino.git
+#  Source and branch for the Neutrino core. Adjust for forks or pinned tags.
+
+#NEUTRINO_CONFIGURE_FLAGS := --enable-debug
+#  Additional `./configure` flags forwarded to the core build.
+
+#LIBSTB_HAL_CONFIGURE_FLAGS := --enable-gstreamer
+#  Additional `./configure` flags forwarded to libstb-hal (e.g. enable GStreamer playback).
+
+#NEUTRINO_CFLAGS_APPEND := -g3 -O0
+#NEUTRINO_CXXFLAGS_APPEND := -g3 -O0
+#  Extra compiler flags (useful for debug builds or stricter warnings). Defaults already include a
+#  curated warning set; override `NEUTRINO_WARN_OPTS` / `NEUTRINO_WARN_OPTS_CXX` to replace it entirely.
+
+#DEBUG_BUILD := 0
+#ENABLE_ASAN := 0
+#ENABLE_TSAN := 0
+#ENABLE_UBSAN := 0
+#  Toggle debug/ sanitizer builds. DEBUG_BUILD=1 setzt -O0/-g3/fno-omit-frame-pointer.
+#  ASAN/TSAN/UBSAN hängen die passenden -fsanitize-Flags an C/CXX/LDFLAGS:
+#    ENABLE_ASAN=1  -> -fsanitize=address
+#    ENABLE_UBSAN=1 -> -fsanitize=undefined
+#    ENABLE_TSAN=1  -> -fsanitize=thread
+#  Hinweis: ASAN und TSAN sind gegenseitig exklusiv.
+
+#PREFERRED_FFMPEG_VERSION := 5.1.4
+#FFMPEG_VERSION := 6.1.1
+#  Default ffmpeg version used by deps-ffmpeg (and overridden by deps-ffmpeg-<ver>). PREFERRED_FFMPEG_VERSION
+#  sets the global default; FFMPEG_VERSION overrides per invocation. Use `make deps-ffmpeg-<ver>` to pin a
+#  specific release without editing this file.
+#FFMPEG_USE_SYSTEM := 1
+#  Use the host ffmpeg if available and version-matching; default is 0 (always build locally into the sysroot).
+#FFMPEG_CONFIGURE_FLAGS := --enable-nonfree --enable-libx264
+#  Additional flags passed to ffmpeg's ./configure (e.g. to enable nonfree/GPL codecs or custom hwaccels).
+
+#NEUTRINO_GDB_AUTORUN := 0
+#NEUTRINO_GDB_COMMANDS := break main;bt
+#  Fine-tune `make run-gdb`. With AUTORUN=0 gdb stops at the prompt; additional commands are executed
+#  before the optional `run` (semicolon-separated list).
+
+#NEUTRINO_LUA_FLAVOR := luajit
+#  Selects the Lua runtime (luajit, lua, system). See README for details.
+
+#TOOLCHAIN_GCC_VERSION := 15
+#CC := $(ROOT_DIR)/artifacts/toolchains/gcc-15.2.0/bin/gcc-15
+#CXX := $(ROOT_DIR)/artifacts/toolchains/gcc-15.2.0/bin/g++-15
+#DEBUG_BUILD := 1
+#  GCC selection: use TOOLCHAIN_GCC_VERSION for versioned distro packages (`make neutrino-gcc-15`
+#  expects gcc-15/g++-15 on PATH; TOOLCHAIN_GCC_VERSION=system keeps the host default, e.g. gcc-12).
+#  For a self-built toolchain (e.g. via scripts/build_gcc.sh), point CC/CXX at the installed binaries
+#  or prepend PATH accordingly. DEBUG_BUILD=1 enables -O0 -g3 etc.
+
+#######################################
+#  Directory / path layout overrides  #
+#######################################
+
+#ROOT_DIR := $(abspath $(CURDIR))
+#ARCHIVE_DIR := $(ROOT_DIR)/archive
+#SOURCES_DIR := $(ROOT_DIR)/sources
+#BUILD_DIR := $(ROOT_DIR)/build
+#OUTPUT_DIR := $(ROOT_DIR)/artifacts
+#CACHE_DIR := $(ROOT_DIR)/.cache
+#LOG_DIR := $(ROOT_DIR)/logs
+#VENV_DIR := $(ROOT_DIR)/.venv
+#  Core working directories; defaults are relative to the repository root.
+
+#PLUGINS_DIR := $(ROOT_DIR)/plugins
+#  Location of custom plugin sources. Can point to a dedicated staging repository.
+
+#NEUTRINO_INSTALL_DIR := $(OUTPUT_DIR)/sysroot
+#NEUTRINO_RUNTIME_PREFIX := $(ROOT_DIR)/root
+#NEUTRINO_PREFIX := /usr
+#  Installation path and runtime staging directory for the Neutrino core. To relocate the actual
+#  storage (e.g. `/opt/neutrino`), adjust `NEUTRINO_INSTALL_DIR` and `NEUTRINO_RUNTIME_PREFIX`.
+#  Note: `NEUTRINO_PREFIX` describes the logical prefix inside the sysroot – do not point it at a
+#  host directory. After changing `NEUTRINO_INSTALL_DIR`, rerun `make deps` once so dependencies
+#  rebuild into the new location.
+
+# Example: host runtime tweaks
+#NEUTRINO_RUNTIME_PREFIX := $(ROOT_DIR)/root
+#  Pfad für das gestagte Laufzeit-Root. Standard ist bereits $(ROOT_DIR)/root; anpassen, wenn ein anderer
+#  Speicherort gewünscht ist (z. B. separater SSD-Mount).
+#
+#RUN_NEUTRINO_DISPLAY := :99
+#  DISPLAY, das `make run` nutzt. Standard ist $DISPLAY des Hosts (Fallback :99).
+#
+#NEUTRINO_HEADLESS_BACKEND := xvfb
+#  Headless Backend für GUI-Tests/Headless-Starts (xvfb oder xpra, falls installiert).
+#
+#NEUTRINO_RUN_WRAPPER := gdb --args
+#  Optionaler Wrapper für den Start (z. B. gdb, valgrind). Beispiel:
+#  NEUTRINO_RUN_WRAPPER="valgrind --tool=memcheck" make run-now
+#
+#SIMULATE_FE := 0
+#  Der Host-Wrapper (`root/usr/bin/neutrino`) setzt standardmäßig `SIMULATE_FE=1`, damit Neutrino
+#  auch ohne DVB-Hardware stabil bleibt. Überschreibe die Variable hier, falls du andere Werte vorgeben möchtest.
+#
+#TUXWETTER_GIT_URL := https://github.com/tuxbox-neutrino/plugin-tuxwetter
+#TUXWETTER_GIT_REF := main
+#  Quelle für das Tuxwetter-Plugin (Auto-Clone nach plugins/tuxwetter). Ref ist optional.
+#
+#NEUTRINO_WEB_PORT := 31344
+#  Port des yWeb-Interfaces, der beim erstmaligen Erzeugen von `root/usr/var/tuxbox/config/nhttpd.conf`
+#  durch `make runtime-sync` gesetzt wird. Bestehende Werte werden nicht überschrieben.
+#
+#NEUTRINO_WEB_HOST := 0.0.0.0
+#  Bind-Adresse des Webservers. `0.0.0.0` bedeutet „alle Interfaces“. Setze z. B. `127.0.0.1`, um das
+#  Interface ausschließlich lokal verfügbar zu machen. `make runtime-sync` trägt den Wert nur beim
+#  erstmaligen Anlegen von `nhttpd.conf` ein.
+
+#VALGRIND := valgrind
+#GDB := gdb
+#  Optionale overrides für Werkzeuge, falls sie nicht im PATH oder unter anderem Namen liegen.
+
+#PYTHON := python3
+#PIP := pip3
+#  By default the project venv (.venv) is used when present. Set these to opt out
+#  of the venv and use the host interpreter (or point them at a specific one).
+
+############################################
+#  Mirror variables for plugins (`N_*`)     #
+############################################
+
+#N_PREFIX := $(NEUTRINO_PREFIX)
+#N_SYSCONFDIR := $(N_PREFIX)/etc
+#N_LOCALSTATEDIR := $(N_PREFIX)/var
+#N_CONFIG_DIR := $(N_SYSCONFDIR)/neutrino/config
+#N_CONTROLDIR := $(N_PREFIX)/share/tuxbox/neutrino/control
+#N_CONTROLDIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/control
+#N_DATADIR := $(N_PREFIX)/share/tuxbox
+#N_DATADIR_VAR := $(N_LOCALSTATEDIR)/tuxbox
+#N_FLAGDIR := $(N_LOCALSTATEDIR)/etc
+#N_FONTDIR := $(N_PREFIX)/share/fonts
+#N_FONTDIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/fonts
+#N_GAMES_DIR := $(N_SYSCONFDIR)/neutrino/plugins
+#N_HOSTED_HTTPDDIR := /mnt/hosted
+#N_ICONS_DIR := $(N_PREFIX)/share/tuxbox/neutrino/icons
+#N_ICONS_DIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/icons
+#N_LIBDIR := $(N_PREFIX)/lib/tuxbox
+#N_LOCALEDIR := $(N_PREFIX)/share/tuxbox/neutrino/locale
+#N_LOCALEDIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/locale
+#N_LOGODIR := $(N_PREFIX)/share/tuxbox/neutrino/icons/logo
+#N_LOGODIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/icons/logo
+#N_PLUGIN_DIR := $(N_PREFIX)/share/tuxbox/neutrino/plugins
+#N_PLUGIN_DIR_VAR := $(N_SYSCONFDIR)/neutrino/plugins
+#N_PLUGIN_DIR_MNT := /mnt/plugins
+#N_LUAPLUGIN_DIR := $(N_PREFIX)/share/tuxbox/neutrino/luaplugins
+#N_LUAPLUGIN_DIR_VAR := $(N_PLUGIN_DIR_VAR)
+#N_PRIVATE_HTTPDDIR := $(N_PREFIX)/share/tuxbox/neutrino/httpd
+#N_PUBLIC_HTTPDDIR := $(N_LOCALSTATEDIR)/tuxbox/httpd
+#N_THEMESDIR := $(N_PREFIX)/share/tuxbox/neutrino/themes
+#N_THEMESDIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/themes
+#N_WEBRADIO_DIR := $(N_PREFIX)/share/tuxbox/neutrino/plugins/webradio
+#N_WEBRADIO_DIR_VAR := $(N_SYSCONFDIR)/neutrino/plugins/webradio
+#N_WEBTV_DIR := $(N_PREFIX)/share/tuxbox/neutrino/webtv
+#N_WEBTV_DIR_VAR := $(N_SYSCONFDIR)/neutrino/webtv
+#N_ZAPITDIR := $(N_CONFIG_DIR)/zapit
+#N_LCD4L_ICONSDIR := $(N_PREFIX)/share/tuxbox/neutrino/lcd/icons
+#N_LCD4L_ICONSDIR_VAR := $(N_LOCALSTATEDIR)/tuxbox/lcd/icons
+#  These variables mirror the runtime layout and are propagated to plugin builds. Override them once
+#  here if an OEM layout requires different paths.
+
+########################################
+#  Plugin-specific build parameters    #
+########################################
+
+#PLUGIN_PKG_CONFIG_SYSROOT_DIR :=
+#PLUGIN_PKG_CONFIG_PATH := $(PKG_CONFIG_PATH)
+#PLUGIN_PROGRAM_PREFIX :=
+#PLUGIN_PROGRAM_SUFFIX :=
+#PLUGIN_PROGRAM_TRANSFORM_NAME :=
+#PLUGIN_PROGRAM_NAME :=
+#  Fine-grained control for plugin builds:
+#    • `PLUGIN_PKG_CONFIG_SYSROOT_DIR` – custom pkg-config sysroot (empty = host headers).
+#    • `PLUGIN_PKG_CONFIG_PATH` – extra pkg-config search paths.
+#    • `PLUGIN_PROGRAM_PREFIX` / `PLUGIN_PROGRAM_SUFFIX` – decorate installed binaries.
+#    • `PLUGIN_PROGRAM_TRANSFORM_NAME` – sed transform similar to Autotools `--program-transform-name`.
+#    • `PLUGIN_PROGRAM_NAME` – explicit binary name (overrides prefix/suffix/transform for the main target).
+
+########################################
+#  Extra examples / custom targets      #
+########################################
+
+# Example: alias for the plugin build
+#plugin-update:
+#	$(MAKE) plugins
+
+# Example: inspect current make/env overrides
+#inspect-env:
+#	@echo "=== make variable overrides ==="
+#	@$(foreach v,$(sort $(.VARIABLES)), \
+#		$(if $(filter environment% default automatic,$(origin $v)),,$(printf '%-28s %s\n' '$(v):' '$(value $v)')))
+#	@echo "=== selected environment variables ==="
+#	@env | LC_ALL=C sort | grep -E '^(ALLOW_NON_ROOT|NEUTRINO_|PLUGINS_DIR|TOOLCHAIN_)'
+
+# Example: plugin build with a custom sysroot + binary suffix
+#plugins-custom:
+#	PLUGIN_PKG_CONFIG_SYSROOT_DIR=/opt/neutrino/sysroot \
+#	PLUGIN_PROGRAM_SUFFIX=-custom \
+#	$(MAKE) plugin-plugin-bin-sysinfo
+
+# Example: host run without chroot (quick smoke tests)
+#run-dev:
+#	ALLOW_NON_ROOT=1 $(MAKE) run-now

@@ -1,3 +1,64 @@
+# Legacy artifacts
 obj
 root
 src
+root-asan
+root-debug
+root-tsan
+
+# New build artifacts
+build/
+sources/
+artifacts/
+install/
+logs/
+.cache/
+archive/
+*.o
+.venv/
+.venv_migit/
+venv/
+.pytest_cache/
+tools/
+work/
+node_modules/
+services/mediathek-backend/
+*.pyc
+__pycache__/
+/*.AppImage
+*.deb
+*.tar.gz
+*.log
+.docker-run.env
+tests/web/package-lock.json
+tests/web/playwright-report/
+.playwright-mcp/
+
+# Screenshots dropped in the repo root by manual Playwright runs
+/*.png
+
+# Internal local files
+Makefile.local
+Makefile.local.post
+.unused/
+*local.json
+
+# Per-developer AI/agent scaffolding. Anchored to the repository root and named
+# explicitly on purpose: the previous globs (A*T.md, C*E.md, G*I.md) were not
+# anchored, so they also swallowed plausible documents anywhere in the tree --
+# docs/CONTRIBUTE.md, docs/CHANGE.md and docs/GUI.md would all have been
+# invisible, with no error to notice.
+/AGENTS.md
+/CLAUDE.md
+/CODEX.md
+/GEMINI.md
+/MEMORY.md
+/SKILLS.md
+/workitems/
+/.agent-workflow/
+/.claude/
+/.codex/
+/.gemini/
+/.cursorrules
+/.ruler
+/.mcp.json
