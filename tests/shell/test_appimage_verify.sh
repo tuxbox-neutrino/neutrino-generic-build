@@ -67,8 +67,13 @@ fi
 # Built through gen_appimage.sh rather than assembled by hand, so the AppRun the
 # gate inspects is the real one. What gen does not produce -- the data volume of
 # a real install, and the libraries the gate expects by name -- is added here.
+# $1 = sysroot, $2 = soname for the freeglut stand-in. The second argument
+# exists because the soname differs per distribution -- libglut.so.3 on
+# Debian 13, libglut.so.3.12 on Ubuntu 24.04 -- and a gate that names it is
+# wrong on one of them.
 build_sysroot() {
 	root="$1"
+	glut_soname="${2:-libglut.so.3}"
 	rm -rf "$root"
 	mkdir -p "$root/usr/bin" "$root/usr/lib" "$root/usr/share/lua/5.1"
 	data="$root$PREFIX/usr"
@@ -125,22 +130,32 @@ int fake_entry(void)
 	return 0;
 }
 CSRC
-	# Unquoted on purpose: CC may be "ccache gcc".
-	# shellcheck disable=SC2086
-	$CC -s -o "$root/usr/bin/neutrino" "$WORK/fake.c" >/dev/null 2>&1 || return 1
 	# shellcheck disable=SC2086
 	$CC -s -shared -fPIC -o "$root/usr/lib/libluajit-5.1.so.2" "$WORK/fakelib.c" \
 		>/dev/null 2>&1 || return 1
-	# The libraries the gate expects by name. Built from a source without the
-	# staging path: only the LuaJIT library is exempt from the host-path check,
-	# and copying it under these names would fail the fixture for a reason this
-	# file is not about.
+	# Stand-ins for the libraries a package has to carry. Built from a source
+	# without the staging path: only the LuaJIT library is exempt from the
+	# host-path check, and copying it under these names would fail the fixture
+	# for a reason this file is not about.
+	#
+	# Each gets its real soname and the binary is linked against it, because the
+	# gate derives what must be bundled from the binary's own DT_NEEDED list.
+	# A fixture whose binary depends on nothing would let that check pass no
+	# matter what the package is missing.
 	printf 'int stub_entry(void) { return 0; }\n' > "$WORK/stub.c"
-	for l in libGLEW.so.2.2 libglut.so.3 libfreetype.so.6; do
+	stub_libs=""
+	for l in libGLEW.so.2.2 "$glut_soname" libfreetype.so.6; do
 		# shellcheck disable=SC2086
-		$CC -s -shared -fPIC -o "$root/usr/lib/$l" "$WORK/stub.c" \
+		$CC -s -shared -fPIC -Wl,-soname,"$l" -o "$root/usr/lib/$l" "$WORK/stub.c" \
 			>/dev/null 2>&1 || return 1
+		stub_libs="$stub_libs -l:$l"
 	done
+	# --no-as-needed: the stand-in calls nothing in them, and the linker would
+	# otherwise drop the very DT_NEEDED entries this fixture exists to produce.
+	# Unquoted on purpose: CC may be "ccache gcc", and stub_libs is a list.
+	# shellcheck disable=SC2086
+	$CC -s -o "$root/usr/bin/neutrino" "$WORK/fake.c" \
+		-L"$root/usr/lib" -Wl,--no-as-needed $stub_libs >/dev/null 2>&1 || return 1
 	return 0
 }
 
@@ -277,10 +292,46 @@ inject_stdcxx() { cp "$BAD/usr/lib/libGLEW.so.2.2" "$BAD/usr/lib/libstdc++.so.6"
 mutate stdcxx "C runtime are bundled" \
 	"an injected libstdc++ is caught by the pattern" inject_stdcxx
 
-# A required library simply absent.
+# A library the binary needs, simply absent. Named by the binary rather than by
+# the gate: the list this replaced spelled out soname versions, and libglut.so.3
+# does not exist on Ubuntu 24.04, so the gate rejected a sound package built
+# there.
 drop_freetype() { rm -f "$BAD/usr/lib/libfreetype.so.6"; }
-mutate freetype "libfreetype.so.6 is missing" \
-	"a library the host does not provide going missing is caught" drop_freetype
+mutate freetype "does not carry: libfreetype.so.6" \
+	"a library the binary needs going missing is caught" drop_freetype
+
+drop_glut() { rm -f "$BAD/usr/lib/libglut.so.3"; }
+mutate glut "does not carry: libglut.so.3" \
+	"the check follows the binary's own dependency list, not a fixed one" drop_glut
+
+# The regression this cost a CI run: freeglut is libglut.so.3 on Debian 13 and
+# libglut.so.3.12 on Ubuntu 24.04. A gate that names the file rejects a sound
+# package built on the other distribution, which is exactly what happened.
+if build_sysroot "$WORK/sysroot-alt" libglut.so.3.12; then
+	( cd "$ROOT_DIR" && \
+		SRC_DIR="$FAKE_SRC" \
+		NEUTRINO_INSTALL_DIR="$WORK/sysroot-alt" \
+		APPIMAGE_OUTPUT_DIR="$WORK/out-alt" \
+		NEUTRINO_APPIMAGE_PREFIX="$PREFIX" \
+		APPIMAGE_BUNDLE_GSTREAMER=0 \
+		APPIMAGE_TOOL=/nonexistent-appimagetool \
+		"$GEN" ) >"$WORK/gen-alt.log" 2>&1
+	if [ -d "$WORK/out-alt/Neutrino.AppDir" ]; then
+		out="$(run_verify "$WORK/out-alt/Neutrino.AppDir" alt "$FLOOR")"
+		if [ $? -eq 0 ] && printf '%s' "$out" | grep -q 'Static checks passed'; then
+			ok "a different soname for the same library still passes"
+		else
+			ko "a different soname for the same library still passes" \
+				"$(printf '%s' "$out" | tail -3)"
+		fi
+	else
+		ko "a different soname for the same library still passes" \
+			"gen_appimage.sh produced no AppDir: $(tail -2 "$WORK/gen-alt.log")"
+	fi
+else
+	ko "a different soname for the same library still passes" \
+		"the alternative fixture could not be built"
+fi
 
 # A shared object that cannot be read is not automatically harmless: a truncated
 # one wears the ELF magic, and skipping it silently is how a wrong-architecture

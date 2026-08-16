@@ -132,6 +132,24 @@ pass "data tree carries real files (${icon_count} icons, ${locale_count} locales
 # libOpenGL, libglapi, libdrm* and libgbm, and a four-name list let injected
 # libGLESv2 and libOpenGL through while claiming "no libGL family is bundled".
 gl_family='^(libGL\.so|libGLX\.so|libGLdispatch\.so|libEGL\.so|libGLESv[0-9]*\.so|libOpenGL\.so|libglapi\.so|libdrm\.so|libdrm_|libgbm\.so)'
+
+# The two "not ours to ship" families, defined once because three checks below
+# need them: what the binary may leave to the machine, what an untouched system
+# is allowed to be missing, and what must never be found inside the package.
+#
+# host_provided is wider than gl_family: it also covers the display protocol
+# libraries, which the package does not carry either.
+host_provided='^lib(GL|GLX|GLdispatch|GLESv[0-9]*|EGL|OpenGL|glapi|drm|gbm|wayland-[a-z]+|X11|X11-xcb|xcb|xcb-[a-z0-9-]+|Xext|Xrender|Xfixes|Xdamage|Xxf86vm|xshmfence)[-.]'
+
+# glibc and the gcc runtime have to come from the target. Mixing pieces of them
+# across the boundary fails on any machine whose glibc is older than the build
+# host's, and the failure is a version-symbol error at start-up.
+# A pattern, not a list of names. An earlier version enumerated nine files and
+# therefore said "no part of the C runtime is bundled" about a package that
+# shipped libgomp -- the same hand-maintained-list failure these checks exist to
+# catch. libgomp and libatomic are deliberately not matched: they are leaves
+# that talk to no driver and need not agree with the target's copy.
+c_runtime='^(ld-linux|libc\.so|libm\.so|libmvec\.|libdl\.|librt\.|libpthread\.|libresolv\.|libnsl\.|libanl\.|libutil\.|libcrypt\.|libthread_db|libBrokenLocale|libnss_|libstdc\+\+|libgcc_s)'
 bundled_gl=""
 while IFS= read -r lib; do
   name="$(basename "${lib}")"
@@ -140,10 +158,26 @@ while IFS= read -r lib; do
 done < <(find "${appdir}/usr/lib" -maxdepth 1 -name '*.so' -o -maxdepth 1 -name '*.so.*')
 [[ -z "${bundled_gl}" ]] || fail "graphics-driver libraries are bundled:${bundled_gl}"
 pass "no host graphics libraries bundled"
-for required in libGLEW.so.2.2 libglut.so.3 libfreetype.so.6; do
-  [[ -e "${appdir}/usr/lib/${required}" ]] || fail "${required} is missing from the package"
-done
-pass "the libraries the host does not provide are bundled"
+# What the package must carry is decided by the binary, not by a list kept here.
+# The list this replaces named three files including their soname versions, and
+# libglut.so.3 does not exist on Ubuntu 24.04 -- so the gate rejected a perfectly
+# good package built there, for the same reason a hand-kept list has failed in
+# this change set three times before. Everything the binary asks for has to be
+# in the package unless policy deliberately leaves it to the machine.
+missing_needed=""
+needed_count=0
+while IFS= read -r needed; do
+  [[ -n "${needed}" ]] || continue
+  needed_count=$((needed_count + 1))
+  if [[ "${needed}" =~ ${host_provided} ]]; then continue; fi
+  if [[ "${needed}" =~ ${c_runtime} ]]; then continue; fi
+  if [[ -e "${appdir}/usr/lib/${needed}" || -e "${appdir}/usr/lib64/${needed}" ]]; then continue; fi
+  missing_needed="${missing_needed} ${needed}"
+done < <(readelf -d "${binary}" 2>/dev/null | awk -F'[][]' '/NEEDED/ {print $2}')
+[[ "${needed_count}" -gt 0 ]] || fail "the binary lists no dependencies at all; readelf cannot read it"
+[[ -z "${missing_needed}" ]] \
+  || fail "the binary needs libraries the package does not carry:${missing_needed}"
+pass "all ${needed_count} libraries the binary needs are bundled or left to the host by policy"
 
 # A library of the wrong architecture is invisible to a "not found" check: the
 # loader skips it and quietly falls through to the host's copy, so the package
@@ -188,15 +222,8 @@ done < <(find "${appdir}/usr/lib" -name '*.so' -o -name '*.so.*')
 [[ "${elf_count}" -gt 0 ]] || fail "no bundled shared object could be read at all, so the architecture check proved nothing"
 pass "all ${elf_count} bundled shared objects are ${binary_id}, like the binary"
 
-# glibc and the gcc runtime have to come from the target. Mixing pieces of them
-# across the boundary fails on any machine whose glibc is older than the build
-# host's, and the failure is a version-symbol error at start-up.
-# A pattern, not a list of names. The previous version enumerated nine files and
-# therefore said "no part of the C runtime is bundled" about a package that
-# shipped libgomp -- the same hand-maintained-list failure this check exists to
-# catch. libgomp and libatomic are deliberately not matched: they are leaves
-# that talk to no driver and need not agree with the target's copy.
-c_runtime='^(ld-linux|libc\.so|libm\.so|libmvec\.|libdl\.|librt\.|libpthread\.|libresolv\.|libnsl\.|libanl\.|libutil\.|libcrypt\.|libthread_db|libBrokenLocale|libnss_|libstdc\+\+|libgcc_s)'
+# Nothing of the target's C runtime may travel inside the package (pattern
+# defined above, with the reasoning).
 bundled_runtime=""
 while IFS= read -r lib; do
   name="$(basename "${lib}")"
@@ -412,7 +439,7 @@ fail_with_log() { tail -n 25 "${log}" >&2; fail "$@"; }
 # stack -- the libraries deliberately left out of the package because they have
 # to match the machine's driver. Anything else here is a library that was meant
 # to be bundled and is not, which on the developer's machine is invisible.
-host_provided='^lib(GL|GLX|GLdispatch|GLESv[0-9]*|EGL|OpenGL|glapi|drm|gbm|wayland-[a-z]+|X11|X11-xcb|xcb|xcb-[a-z0-9-]+|Xext|Xrender|Xfixes|Xdamage|Xxf86vm|xshmfence)[-.]'
+# (host_provided is defined once near the top, with the other policy patterns.)
 stock_missing="$(awk '/^STOCK_MISSING: / {print $2}' "${log}" | sort -u)"
 unexpected_missing=""
 while IFS= read -r missing; do
