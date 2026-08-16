@@ -13,7 +13,10 @@ NEUTRINO_NAME="${NEUTRINO_NAME:-Neutrino}"
 DATA_PREFIX="${NEUTRINO_APPIMAGE_PREFIX:-/opt/neutrino}"
 
 VERSION_JSON=$(scripts/version_info.sh)
-VERSION_PKG=$(printf '%s' "${VERSION_JSON}" | python3 -c 'import sys,json;data=json.load(sys.stdin);print(data.get("package") or data.get("slug") or data.get("base") or "dev")')
+# slug, not package: the package version carries a '+' because dpkg wants one,
+# and a '+' in a release asset filename gets read as a space by uploaders that
+# do not encode it, leaving the download link pointing at nothing.
+VERSION_PKG=$(printf '%s' "${VERSION_JSON}" | python3 -c 'import sys,json;data=json.load(sys.stdin);print(data.get("slug") or data.get("base") or "dev")')
 ARCH=$(uname -m)
 APPIMAGE_NAME="${NEUTRINO_NAME}_${VERSION_PKG}_${ARCH}.AppImage"
 

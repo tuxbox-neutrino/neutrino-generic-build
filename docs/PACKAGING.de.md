@@ -120,6 +120,56 @@ Diese Umgebung unterstützt drei Paketarten:
    - Führt intern `make neutrino-static` aus und archiviert das Ergebnis.
    - Achtung: Statisch gelinkte Builds können größer sein und Probleme mit proprietären Grafiktreibern verursachen.
 
+## Wie Artefakte versioniert werden
+
+`scripts/version_info.sh` ist die einzige Quelle. Es meldet
+
+```
+<major>.<minor>.<micro>+git<JJJJMMTTHHMMSS>.g<commit>[~dirty]
+```
+
+also zum Beispiel `2026.8.27+git20260815065207.g13ae2fa8b8`. Die drei Zahlen
+stammen aus Neutrinos `configure.ac`, das upstream automatisch gepflegt wird —
+`ver_micro` ist der Commit-Abstand zum Anker-Tag. Der Zeitstempel ist das
+Commit-Datum in **UTC**, der Hash auf feste zehn Zeichen gekürzt.
+
+Jeder Bestandteil hat einen Grund:
+
+- Der **Zeitstempel** macht die Version monoton, so dass `apt` ein neueres Paket
+  auch als neuer erkennt. Ohne ihn sortierte die Version *unter* dem bereits
+  Ausgelieferten, und mehrere Commits zwischen zwei `ver_micro`-Bumps wären nur
+  nach ihrem Hash geordnet, also willkürlich.
+- Die **feste Hash-Länge** ist es, was die Version reproduzierbar macht. Git
+  leitet die automatische Kürzung aus der Objektanzahl ab — derselbe Commit
+  hätte sieben Zeichen im flachen CI-Klon und zehn im Vollklon des Entwicklers.
+- `~dirty` kennzeichnet einen Bau aus verändertem Baum. Die Tilde sortiert in
+  Debians Ordnung *unter* dem sauberen Bau; ein Pluszeichen sortierte darüber,
+  und ein gepatchtes CI-Artefakt überholte damit das Release, aus dem es stammt.
+
+Daraus werden zwei Formen abgeleitet. Die **Paketversion** behält das `+`, weil
+dpkg es so erwartet, und enthält keinen Bindestrich, damit dpkg nicht einen Teil
+davon für eine Debian-Revision hält. Der **Dateiname** ersetzt das `+` durch
+einen Punkt: `Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`.
+Uploads von Release-Assets verstümmeln Sonderzeichen, und ein als Leerzeichen
+gelesenes `+` lässt den Download-Link ins Leere zeigen.
+
+Ein Quellbaum ohne `.git` — Export oder Tarball — meldet das nackte
+`<major>.<minor>.<micro>`. Ein vorhandenes, aber unbrauchbares `.git` ist etwas
+anderes und bricht den Bau ab: die nackte Version sortiert unter jedem echten
+Paket und würde nie als Upgrade angeboten, deshalb ist stilles Raten schlechter
+als Anhalten.
+
+Das Feld `git_tag` im JSON ist reine Information und ausdrücklich **nicht**
+reproduzierbar: ein flacher Klon hat keine Tags, gegen die `describe` arbeiten
+könnte. Genau darum entscheidet es über keinen Namen mehr.
+
+Eine Folge, die man kennen sollte: weil die Neutrino-Quellen mit `--depth 1`
+geklont werden, zeigt `ver_git` aus `configure.ac` — die VCS-Zeile unter
+*Image-Informationen* — bei einem CI-Bau einen nackten Commit-Hash, wo ein
+lokaler Bau `v2026.8-32-g13ae2fa8b8` anzeigt. Tags nachzuholen behebt das nicht;
+`git describe` braucht die Historie zwischen HEAD und Tag, und die hat ein
+flacher Klon nicht.
+
 ## Vorbereitung
 
 - Vor dem Paketieren mindestens einmal `make neutrino` ausführen, damit das Sysroot `artifacts/sysroot` gefüllt ist.  

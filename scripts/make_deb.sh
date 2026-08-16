@@ -6,8 +6,23 @@ OUTPUT_DIR="${DEB_OUTPUT_DIR:-artifacts/deb}"
 NEUTRINO_PREFIX="${NEUTRINO_PREFIX:-/usr}"
 PACKAGE_NAME="${PACKAGE_NAME:-neutrino-generic-pc}"
 VERSION_JSON=$(scripts/version_info.sh)
-DEFAULT_VERSION=$(printf '%s' "${VERSION_JSON}" | python3 -c 'import sys,json;data=json.load(sys.stdin);base=data.get("base") or "0.0.0";slug=data.get("slug") or "dev";print(f"{base}+git{slug}")')
+# The version goes in as version_info.sh reports it. Composing it here from base
+# and slug produced "2026.8.27+git2026.8-32-g13ae2fa8b8", which dpkg silently
+# splits at the last hyphen into upstream version "2026.8.27+git2026.8-32" plus
+# Debian revision "g13ae2fa8b8" -- a revision this project never intended to
+# have. The reported version carries no hyphen.
+DEFAULT_VERSION=$(printf '%s' "${VERSION_JSON}" | python3 -c 'import sys,json;data=json.load(sys.stdin);print(data.get("package") or data.get("base") or "0.0.0")')
+DEFAULT_FILE_VERSION=$(printf '%s' "${VERSION_JSON}" | python3 -c 'import sys,json;data=json.load(sys.stdin);print(data.get("slug") or "dev")')
 PACKAGE_VERSION="${PACKAGE_VERSION:-$DEFAULT_VERSION}"
+# The file is named from the slug, like the AppImage and the static bundle: the
+# version keeps its '+' because dpkg wants it, the filename does not because
+# release-asset uploads mangle it. A caller who pins PACKAGE_VERSION gets the
+# same treatment applied to their value rather than a name that contradicts it.
+if [[ "${PACKAGE_VERSION}" == "${DEFAULT_VERSION}" ]]; then
+  PACKAGE_FILE_VERSION="${DEFAULT_FILE_VERSION}"
+else
+  PACKAGE_FILE_VERSION="$(printf '%s' "${PACKAGE_VERSION}" | tr '+' '.' | tr -c '[:alnum:]._-' '-')"
+fi
 ARCH="$(dpkg --print-architecture 2>/dev/null || uname -m)"
 
 if [[ -z "${INSTALL_DIR}" || ! -d "${INSTALL_DIR}" ]]; then
@@ -52,6 +67,6 @@ EOF
 chmod 0755 "${WORKDIR}/DEBIAN/postinst"
 
 mkdir -p "${OUTPUT_DIR}"
-dpkg-deb --build "${WORKDIR}" "${OUTPUT_DIR}/${PACKAGE_NAME}_${PACKAGE_VERSION}_${ARCH}.deb"
+dpkg-deb --build "${WORKDIR}" "${OUTPUT_DIR}/${PACKAGE_NAME}_${PACKAGE_FILE_VERSION}_${ARCH}.deb"
 
-echo "[deb] Paket erstellt unter ${OUTPUT_DIR}/${PACKAGE_NAME}_${PACKAGE_VERSION}_${ARCH}.deb"
+echo "[deb] Paket erstellt unter ${OUTPUT_DIR}/${PACKAGE_NAME}_${PACKAGE_FILE_VERSION}_${ARCH}.deb"

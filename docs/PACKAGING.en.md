@@ -115,6 +115,57 @@ This setup produces three distribution formats:
    - Triggers `make neutrino-static` and archives the result.
    - Caution: static binaries grow in size and may conflict with proprietary graphics stacks.
 
+## How artifacts are versioned
+
+`scripts/version_info.sh` is the single source. It reports
+
+```
+<major>.<minor>.<micro>+git<YYYYMMDDHHMMSS>.g<commit>[~dirty]
+```
+
+for example `2026.8.27+git20260815065207.g13ae2fa8b8`. The three numbers come
+from Neutrino's `configure.ac`, which upstream maintains automatically —
+`ver_micro` is the commit distance from the anchor tag. The timestamp is the
+commit date in **UTC**, and the commit hash is abbreviated to a fixed ten
+characters.
+
+Every part of that is deliberate:
+
+- The **timestamp** makes the version monotonic, so `apt` sees a newer package
+  as newer. Without it the version would sort *below* what has already been
+  shipped, and several commits between two `ver_micro` bumps would be ordered
+  only by their hash, which is to say arbitrarily.
+- The **fixed hash length** is what makes the version reproducible. Git derives
+  its automatic abbreviation from the number of objects in the repository, so
+  the same commit would be seven characters in CI's shallow clone and ten in a
+  developer's full one.
+- `~dirty` marks a build from a modified tree. The tilde sorts *below* the clean
+  build in Debian's ordering; a plus sign would sort above it, and a patched CI
+  build would then outrank the release it came from.
+
+Two forms are derived from it. The **package version** keeps the `+`, because
+that is what dpkg expects, and carries no hyphen so dpkg cannot mistake part of
+it for a Debian revision. The **file name** replaces the `+` with a `.`:
+`Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`. Release
+asset uploads mangle special characters, and a `+` read as a space leaves the
+download link pointing at nothing.
+
+A source tree without `.git` — an export or tarball — reports the bare
+`<major>.<minor>.<micro>`. A `.git` that exists but cannot be used is a
+different matter and aborts the build: the bare version sorts below every real
+package and would never be offered as an upgrade, so guessing one silently is
+worse than stopping.
+
+The `git_tag` field in the JSON is informational only and is deliberately **not**
+reproducible: a shallow clone has no tags to describe against. That is precisely
+why it no longer decides any name.
+
+One consequence worth knowing: because the Neutrino source is cloned with
+`--depth 1`, `configure.ac`'s own `ver_git` — shown as the VCS line under *Image
+information* — is a bare commit hash in a CI build, where a local build shows
+`v2026.8-32-g13ae2fa8b8`. Fetching tags does not fix this; `git describe` needs
+the history between HEAD and the tag, which a shallow clone does not have.
+
 ## Preparation Checklist
 
 - Run `make neutrino` at least once before packaging so the staged sysroot `artifacts/sysroot` is populated.  
