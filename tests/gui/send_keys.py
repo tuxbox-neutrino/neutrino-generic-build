@@ -39,6 +39,11 @@ KEYS = {
     "GREEN": "KEY_GREEN",
     "YELLOW": "KEY_YELLOW",
     "BLUE": "KEY_BLUE",
+    # muting puts the mute icon on screen, and that arms CFrameBuffer's fbArea
+    # mechanism - the one that paints over and restores the icon around foreign
+    # paints. Tests that need that machinery active have no other way to switch
+    # it on from outside.
+    "MUTE": "KEY_MUTE",
     # menus print a digit next to each entry and jump straight to it. Counting
     # cursor steps instead is unreliable, because a menu reopens on whatever
     # was selected last time.
@@ -80,6 +85,7 @@ KEY_CODES = {
     "KEY_GREEN": 399,
     "KEY_YELLOW": 400,
     "KEY_BLUE": 401,
+    "KEY_MUTE": 113,
 }
 
 # struct input_event: a struct timeval, then type, code and value. Native sizes

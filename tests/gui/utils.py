@@ -24,6 +24,30 @@ def ensure_neutrino_running() -> None:
         pytest.skip("Neutrino binary not installed – run `make neutrino` first")
 
 
+def send_keys_skip_reason(stderr: str) -> str | None:
+    """The reason to skip over, when send_keys failed for want of an
+    environment rather than because the key transport is broken.
+
+    An installed binary is not a running one: ensure_neutrino_running() only
+    checks that Neutrino was built, so a suite started without `make run`
+    reaches send_keys and dies there on a FIFO nobody reads. That is a missing
+    precondition, not a defect, and it has to read like one - otherwise the
+    first thing a newcomer sees is a CalledProcessError naming a subprocess.
+
+    Returns None for anything unrecognised, so a genuine failure still raises.
+    """
+    known = (
+        "has no reader",
+        "not found. Ensure Neutrino is running",
+        "is not a FIFO",
+        "python-evdev missing",
+    )
+    for marker in known:
+        if marker in stderr:
+            return f"cannot replay keys: {stderr.strip().splitlines()[-1]}"
+    return None
+
+
 def capture_framebuffer(destination: Path, delay: float = 0.5) -> None:
     """Capture a framebuffer screenshot using fbgrab."""
     require_binary("fbgrab")
@@ -38,6 +62,44 @@ def capture_framebuffer(destination: Path, delay: float = 0.5) -> None:
         pytest.skip(f"no readable framebuffer at {device} – fbgrab cannot capture here")
     time.sleep(delay)
     subprocess.run(["fbgrab", str(destination)], check=True)
+
+
+def capture_x11(destination: Path, delay: float = 0.5) -> None:
+    """Capture the screen of a PC build, which renders into X rather than a
+    framebuffer device.
+
+    Separate from capture_framebuffer() on purpose: that one grabs /dev/fb0 and
+    skips where there is none, which is exactly the PC-build case. A test that
+    needs a picture from an Xvfb-hosted Neutrino has to come here instead.
+    """
+    require_binary("import")
+    display = os.environ.get("DISPLAY")
+    if not display:
+        pytest.skip("DISPLAY not set - start Neutrino under Xvfb before running this test")
+    time.sleep(delay)
+    subprocess.run(["import", "-window", "root", str(destination)], check=True)
+
+
+def images_differ(first: Path, second: Path) -> int:
+    """Number of differing pixels between two screenshots.
+
+    Uses ImageMagick's compare, which reports the count on stderr and exits
+    non-zero whenever the images are not identical - that is a result here, not
+    a failure, so the exit code is deliberately not checked.
+    """
+    require_binary("compare")
+    proc = subprocess.run(
+        ["compare", "-metric", "AE", str(first), str(second), "null:"],
+        capture_output=True,
+    )
+    out = (proc.stderr or b"").decode(errors="ignore").strip().split()
+    if not out:
+        pytest.skip("compare produced no metric - cannot tell the screenshots apart")
+    try:
+        # some builds print "1234 (0.001)"
+        return int(float(out[0]))
+    except ValueError:
+        pytest.skip(f"compare returned an unreadable metric: {out[0]!r}")
 
 
 def ocr_image(path: Path) -> str:
