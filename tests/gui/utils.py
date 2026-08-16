@@ -27,6 +27,15 @@ def ensure_neutrino_running() -> None:
 def capture_framebuffer(destination: Path, delay: float = 0.5) -> None:
     """Capture a framebuffer screenshot using fbgrab."""
     require_binary("fbgrab")
+    # fbgrab being installed says nothing about there being something to grab:
+    # a PC build renders into X (Xvfb), and such a host usually has no
+    # framebuffer device at all. Without this check the test fails on a plain
+    # environment mismatch instead of skipping like every other missing piece.
+    # Same reading as fbgrab's own `device=${FRAMEBUFFER:-/dev/fb0}`: an empty
+    # value falls back to the default rather than naming an empty path.
+    device = os.environ.get("FRAMEBUFFER") or "/dev/fb0"
+    if not os.access(device, os.R_OK):
+        pytest.skip(f"no readable framebuffer at {device} – fbgrab cannot capture here")
     time.sleep(delay)
     subprocess.run(["fbgrab", str(destination)], check=True)
 
