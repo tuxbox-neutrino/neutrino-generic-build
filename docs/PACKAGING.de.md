@@ -79,12 +79,24 @@ Diese Umgebung unterstützt drei Paketarten:
    findet. GStreamer lädt seine Elemente per `dlopen`, und libstb-hal baut die
    Pipeline erst beim Abspielen über `gst_element_factory_make("playbin", …)` —
    ein Paket ohne diese Module startet also einwandfrei, zeigt seine Menüs und
-   spielt dann nichts ab. Sie werden deshalb vollständig vom Buildhost
-   übernommen (`pkg-config --variable=pluginsdir gstreamer-1.0`), zusammen mit
+   spielt dann nichts ab. Werden sie mitgeliefert, kommen sie vollständig vom
+   Buildhost (`pkg-config --variable=pluginsdir gstreamer-1.0`), zusammen mit
    den Bibliotheken, die sie brauchen — gemessen ist das der Unterschied
    zwischen 35 MB und 136 MB.
-   `APPIMAGE_BUNDLE_GSTREAMER=0` baut die kleine Variante, dafür braucht das
-   Zielsystem dann ein eigenes GStreamer.
+
+   Ob sie mitkommen, hängt am Build und nicht an einem eigenen Schalter:
+   `APPIMAGE_BUNDLE_GSTREAMER` steht nur dann auf `1`, wenn
+   `LIBSTB_HAL_CONFIGURE_FLAGS` GStreamer einschaltet, und zwar so gelesen, wie
+   configure es liest: `--enable-gstreamer` und `--enable-gstreamer=yes` schalten
+   ein, `=no` und `--disable-gstreamer` aus, und die letzte Option gewinnt
+   (`make/env-derive.mk`, genutzt von `make/package.mk` und `make/neutrino.mk`).
+   Diese Flags sind standardmäßig leer, und `libstb-hal/configure.ac` hat
+   `enable_gstreamer=no` als Voreinstellung — ein
+   **frischer Checkout baut also ein Neutrino ganz ohne GStreamer-Wiedergabe**,
+   nicht bloß ein Paket ohne die Module. Ein GStreamer auf dem Zielsystem
+   ändert daran nichts, weil nichts es aufriefe. Erst mit
+   `LIBSTB_HAL_CONFIGURE_FLAGS=--enable-gstreamer` wird die Wiedergabe
+   einkompiliert, und dann kommen die Module auch mit.
 
    Ihre Abhängigkeiten werden berechnet, nicht angenommen. Die Upstream-
    Excludelist verwirft `libfontconfig`, `libharfbuzz`, `libfribidi` und
@@ -129,39 +141,72 @@ Diese Umgebung unterstützt drei Paketarten:
 ```
 
 also zum Beispiel `2026.8.27+git20260815065207.g13ae2fa8b8`. Die drei Zahlen
-stammen aus Neutrinos `configure.ac`, das upstream automatisch gepflegt wird —
-`ver_micro` ist der Commit-Abstand zum Anker-Tag. Der Zeitstempel ist das
-Commit-Datum in **UTC**, der Hash auf feste zehn Zeichen gekürzt.
+stammen aus Neutrinos `configure.ac`, das upstream automatisch gepflegt wird.
+Der Zeitstempel ist das Commit-Datum in **UTC**, der Hash auf feste zehn Zeichen
+gekürzt.
 
 Jeder Bestandteil hat einen Grund:
 
-- Der **Zeitstempel** macht die Version monoton, so dass `apt` ein neueres Paket
-  auch als neuer erkennt. Ohne ihn sortierte die Version *unter* dem bereits
-  Ausgelieferten, und mehrere Commits zwischen zwei `ver_micro`-Bumps wären nur
-  nach ihrem Hash geordnet, also willkürlich.
+- Die **Reihenfolge** ergibt sich zuerst aus den drei Zahlen, erst danach aus
+  dem Zeitstempel. `ver_micro` wird upstream in einem eigenen Commit erhöht
+  (`build (ci): bump configure.ac version`) und steht zwischen zwei solchen
+  Bumps still. Es ist also **nicht** der Commit-Abstand zum Anker-Tag, sondern
+  bleibt hinter ihm zurück — gemessen `ver_micro=27` bei den Abständen 27 bis
+  31, und 32 beim Abstand 32, weil dort der nächste Bump liegt. Bei einem
+  neuen Versionsstrang fängt `ver_micro` wieder bei 0 an
+  (`2026.7.53` → `2026.8.0`), dabei steigt aber `ver_minor`: was nie zurückfällt,
+  ist die **dreiteilige Basis**, und darauf beruht die Ordnung. Innerhalb einer
+  Basis ordnet allein das Commit-Datum.
+- Weiter reicht die Zusage nicht, und zwar auf zwei verschiedene Arten. Zwei
+  Commits **in derselben Sekunde** sind gar nicht geordnet: dpkg fällt auf den
+  Hash zurück, also auf Zufall. Ein **zurückdatiertes** Commit-Datum ist
+  geordnet, nur falsch herum — dpkg vergleicht die Zeitstempel und stellt das
+  jüngere Commit unter sein Elternteil. Eine echte Zählung gäbe es nur mit der
+  vollen Historie, und die hat ein `--depth 1`-Klon nicht.
 - Die **feste Hash-Länge** ist es, was die Version reproduzierbar macht. Git
   leitet die automatische Kürzung aus der Objektanzahl ab — derselbe Commit
   hätte sieben Zeichen im flachen CI-Klon und zehn im Vollklon des Entwicklers.
+  `--short=10` genügt dafür nicht, denn das ist nur eine Untergrenze: Git
+  verlängert sie, sobald zehn Zeichen mehrdeutig sind. Deshalb wird die volle
+  Objekt-ID geschnitten.
 - `~dirty` kennzeichnet einen Bau aus verändertem Baum. Die Tilde sortiert in
   Debians Ordnung *unter* dem sauberen Bau; ein Pluszeichen sortierte darüber,
   und ein gepatchtes CI-Artefakt überholte damit das Release, aus dem es stammt.
+  Die Zahlen liest das Skript dabei aus dem Commit, nicht aus dem Arbeitsbaum —
+  sonst höbe ein geändertes `configure.ac` die Version an und das gepatchte
+  Artefakt überholte das Release trotz `~dirty`.
+- `--assume-unchanged` und `--skip-worktree` sagen git, es solle eine Datei nicht
+  mehr ansehen. Die Prüfung sieht trotzdem hin: ein Baum, dessen Patch sich
+  hinter einem der beiden Bits versteckt, ist weiterhin `~dirty` — sonst trüge
+  der Bau den Namen des Releases, von dem er weggepatcht wurde. Ignoriert bleibt
+  einzig eine Datei, die `--skip-worktree` absichtlich nicht vorhält: genau das
+  erzeugt ein Sparse-Checkout, und ein Sparse-Checkout darf einem Vollklon
+  desselben Commits nicht widersprechen. Eine hinter `--assume-unchanged`
+  *gelöschte* Datei ist dagegen eine Änderung wie jede andere, denn dieses Bit
+  verspricht nur, dass eine vorhandene Datei sich nicht ändert.
 
 Daraus werden zwei Formen abgeleitet. Die **Paketversion** behält das `+`, weil
 dpkg es so erwartet, und enthält keinen Bindestrich, damit dpkg nicht einen Teil
 davon für eine Debian-Revision hält. Der **Dateiname** ersetzt das `+` durch
-einen Punkt: `Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`.
-Uploads von Release-Assets verstümmeln Sonderzeichen, und ein als Leerzeichen
-gelesenes `+` lässt den Download-Link ins Leere zeigen.
+einen Punkt und, im veränderten Baum, die Tilde durch einen Bindestrich:
+`Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`, bzw.
+`…g13ae2fa8b8-dirty…`. Uploads von Release-Assets verstümmeln Sonderzeichen, und
+ein als Leerzeichen gelesenes `+` lässt den Download-Link ins Leere zeigen.
 
 Ein Quellbaum ohne `.git` — Export oder Tarball — meldet das nackte
-`<major>.<minor>.<micro>`. Ein vorhandenes, aber unbrauchbares `.git` ist etwas
-anderes und bricht den Bau ab: die nackte Version sortiert unter jedem echten
-Paket und würde nie als Upgrade angeboten, deshalb ist stilles Raten schlechter
-als Anhalten.
+`<major>.<minor>.<micro>`. Alles andere, was Git unbrauchbar macht, bricht den
+Bau ab: ein `.git`, das Git nicht lesen kann, ein ins Leere zeigender
+`.git`-Symlink, ein unlesbarer Index, ein fehlendes Commit-Objekt. Dazu gehört
+auch der Fall, dass Git das `.git` bei seiner Suche überspringt und mit dem
+*umschließenden* Arbeitsbaum antwortet — `sources/neutrino` liegt im Arbeitsbaum
+dieses Repos, und ein abgebrochener Klon hinterlässt genau so ein halbfertiges
+`.git`. Die nackte Version sortiert unter jedem echten Paket und würde nie als
+Upgrade angeboten, deshalb ist stilles Raten dort schlechter als Anhalten.
 
 Das Feld `git_tag` im JSON ist reine Information und ausdrücklich **nicht**
-reproduzierbar: ein flacher Klon hat keine Tags, gegen die `describe` arbeiten
-könnte. Genau darum entscheidet es über keinen Namen mehr.
+reproduzierbar: ein flacher Klon hat keine Historie hinter HEAD, also antwortet
+`git describe` nur dann, wenn ein Tag genau auf dem geholten Commit sitzt, und
+sonst gar nicht. Genau darum entscheidet es über keinen Namen mehr.
 
 Eine Folge, die man kennen sollte: weil die Neutrino-Quellen mit `--depth 1`
 geklont werden, zeigt `ver_git` aus `configure.ac` — die VCS-Zeile unter
@@ -185,8 +230,10 @@ flacher Klon nicht.
     auf dem Build-Host noch auf dem Zielsystem installiert sein. Fehlt auf dem
     Ziel jedes `fusermount`, erscheint zuerst eine Zeile, die mit `Error:`
     beginnt, danach entpackt sich das AppImage selbst und läuft trotzdem.
-  - `dpkg-deb` (Teil von `dpkg-dev`) für Debian-Pakete.
-- `python3` für `scripts/version_info.sh` (wird durch `make deps` bereitgestellt).
+  - `dpkg-deb` (Teil des Pakets `dpkg`) für Debian-Pakete.
+- `python3` für die Paketierskripte, die das JSON von `scripts/version_info.sh`
+  lesen — `make_deb.sh`, `gen_appimage.sh`, `static_link.sh`. `version_info.sh`
+  selbst kommt ohne aus. Wird durch `make deps` bereitgestellt.
 - Die Make-Targets selbst benötigen keine Root-Rechte; Installation/Entpacken der Artefakte üblicherweise schon.
 - Alle Formate in einem Rutsch bauen: `make package-appimage package-deb package-static`.
 Hinweis: Die früheren Container-Workflows sind entfernt; alle Targets laufen direkt auf dem Host.
@@ -299,6 +346,7 @@ Alle Werte lassen sich inline (`make PACKAGE_VERSION=3.30.0 package-deb`) oder d
 | `APPIMAGE_TOOL` | nicht gesetzt | AppImage | Executable, das statt des gepinnten appimagetool benutzt wird. Für reproduzierbare Pakete leer lassen. |
 | `APPIMAGE_OUTPUT_DIR` | `artifacts/appimage` | AppImage | Zielordner für erzeugte AppImage-Dateien. |
 | `APPIMAGE_RUNTIME_PREFIX` | `/opt/neutrino` | AppImage | Prefix, gegen den das paketierte Neutrino gebaut wird und den AppRun zur Laufzeit einblendet. |
+| `APPIMAGE_BUNDLE_GSTREAMER` | `1`, wenn `LIBSTB_HAL_CONFIGURE_FLAGS` GStreamer so einschaltet, wie configure es liest — `--enable-gstreamer` oder `=yes`, letzte Option gewinnt — sonst `0` | AppImage | Folgt dem Build. `0` bei einem mit `--enable-gstreamer` gebauten Neutrino lässt die Module weg — deutlich kleiner, dafür braucht die Wiedergabe dann ein GStreamer auf dem Zielsystem. Beim Standard-Build gibt es keine Wiedergabe, die bedient werden müsste; das Zielsystem braucht nichts. |
 | `APPIMAGE_BUILD_DIR` | `build/neutrino-appimage` | AppImage | Build-Verzeichnis der Paketvariante, getrennt vom Entwicklerbuild. |
 | `APPIMAGE_SYSROOT` | `artifacts/sysroot-appimage` | AppImage | Staging-Baum der Paketvariante. |
 | `NEUTRINO_APPIMAGE_STATE` | `${XDG_DATA_HOME:-~/.local/share}/neutrino-appimage` | AppImage (Laufzeit) | Wo das fertige Paket seine Konfiguration ablegt. Wird von AppRun gelesen, nicht vom Build. |
@@ -330,18 +378,18 @@ make PACKAGE_VERSION=3.30.0 \
 ## Typische Stolpersteine
 
 - **`appimagetool not found`**: `scripts/ensure_appimagetool.sh` ausführen (wird durch `make package-appimage` automatisch gestartet) oder Binary von https://appimage.github.io/AppImageKit/ herunterladen und im `PATH` ablegen.
-- **`dpkg-deb` fehlt**: Paket `dpkg-dev` nachinstallieren.
+- **`dpkg-deb` fehlt**: Paket `dpkg` nachinstallieren (nicht `dpkg-dev` — `dpkg-deb` gehört zu `dpkg`).
 - **Statische Builds scheitern**: Prüfen, ob alle Abhängigkeiten `--enable-static` unterstützen (ggf. auf musl wechseln).
 
 Weitere Hintergrundinfos befinden sich in `docs/README.de.md`.
 
 ## Installation & Start der Artefakte
 
-- **AppImage** (z. B. `Neutrino_0a129a0-x86_64.AppImage`)
+- **AppImage** (z. B. `Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`)
   1. AppImage auf das Zielsystem kopieren.
-  2. Ausführbar machen: `chmod +x Neutrino_<version>-<arch>.AppImage`.
-  3. Start (Root empfohlen): `sudo ./Neutrino_<version>-<arch>.AppImage`. `ALLOW_NON_ROOT=1` nur nutzen, wenn fehlende Gerätefunktion akzeptabel ist.
+  2. Ausführbar machen: `chmod +x Neutrino_<version>_<arch>.AppImage`.
+  3. Start (Root empfohlen): `sudo ./Neutrino_<version>_<arch>.AppImage`. Ohne Root startet Neutrino, hat aber keinen Zugriff auf DVB- und Eingabegeräte. (`ALLOW_NON_ROOT=1` gehört zu den `make run`-Wrappern und wirkt auf ein AppImage nicht.)
 
-- **Debian-Paket** (z. B. `neutrino-generic-pc_3.25.0+git0a129a0_amd64.deb`)
+- **Debian-Paket** (z. B. `neutrino-generic-pc_2026.8.27.git20260815065207.g13ae2fa8b8_amd64.deb`)
   1. Installation per `sudo apt install ./neutrino-generic-pc_<version>_<arch>.deb`.
   2. Binary liegt anschließend unter `/usr/bin/neutrino`; Start über `sudo neutrino` (oder via Service/Unit). Das Postinst-Skript weist nochmals auf Root-/Geräteanforderungen hin.

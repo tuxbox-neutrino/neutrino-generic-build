@@ -78,11 +78,24 @@ This setup produces three distribution formats:
    GStreamer loads its elements with `dlopen`, and libstb-hal builds its
    pipeline with `gst_element_factory_make("playbin", …)` when playback starts —
    so a package without those modules starts perfectly, shows its menus, and
-   then plays nothing. They are therefore copied in whole from the build host
-   (`pkg-config --variable=pluginsdir gstreamer-1.0`), together with the libraries
-   they need — measured, that is the difference between a 35 MB and a 136 MB
-   package. `APPIMAGE_BUNDLE_GSTREAMER=0` builds the small variant, at the price
-   of needing GStreamer on the target.
+   then plays nothing. When they are bundled they are copied in whole from the
+   build host (`pkg-config --variable=pluginsdir gstreamer-1.0`), together with
+   the libraries they need — measured, that is the difference between a 35 MB
+   and a 136 MB package.
+
+   Whether they are bundled follows the build rather than a separate switch:
+   `APPIMAGE_BUNDLE_GSTREAMER` defaults to `1` only when
+   `LIBSTB_HAL_CONFIGURE_FLAGS` enables GStreamer, read the way configure reads
+   it: `--enable-gstreamer` or `--enable-gstreamer=yes` turn it on, `=no` and
+   `--disable-gstreamer` turn it off, and the last of them wins
+   (`make/env-derive.mk`, used by `make/package.mk` and `make/neutrino.mk`).
+   That variable is empty by default and `libstb-hal/configure.ac` defaults
+   `enable_gstreamer=no`, so **a clean
+   checkout builds a Neutrino without GStreamer playback at all** — not merely
+   a package without the modules. Installing GStreamer on the target changes
+   nothing, because nothing would call it. Build with
+   `LIBSTB_HAL_CONFIGURE_FLAGS=--enable-gstreamer` to compile playback in, and
+   the modules are bundled along with it.
 
    Their dependencies are worked out rather than assumed. The upstream exclude
    list drops `libfontconfig`, `libharfbuzz`, `libfribidi` and `libasound` on the
@@ -124,41 +137,71 @@ This setup produces three distribution formats:
 ```
 
 for example `2026.8.27+git20260815065207.g13ae2fa8b8`. The three numbers come
-from Neutrino's `configure.ac`, which upstream maintains automatically —
-`ver_micro` is the commit distance from the anchor tag. The timestamp is the
-commit date in **UTC**, and the commit hash is abbreviated to a fixed ten
-characters.
+from Neutrino's `configure.ac`, which upstream maintains automatically. The
+timestamp is the commit date in **UTC**, and the commit hash is abbreviated to a
+fixed ten characters.
 
 Every part of that is deliberate:
 
-- The **timestamp** makes the version monotonic, so `apt` sees a newer package
-  as newer. Without it the version would sort *below* what has already been
-  shipped, and several commits between two `ver_micro` bumps would be ordered
-  only by their hash, which is to say arbitrarily.
+- **Ordering** follows the three numbers first and the timestamp only after
+  that. Upstream raises `ver_micro` in a commit of its own (`build (ci): bump
+  configure.ac version`) and it then stands still until the next bump. So it is
+  **not** the commit distance from the anchor tag; it lags behind it — measured,
+  `ver_micro=27` across distances 27 through 31, and 32 at distance 32,
+  because that distance is the next bump. A new version line restarts it
+  at 0 (`2026.7.53` → `2026.8.0`), but `ver_minor` rises in the same commit:
+  what never goes backwards is the **three-part base**, and that is what the
+  ordering rests on. Within one base the commit date is all that orders the
+  builds.
+- The promise stops there, in two different ways. Two commits **in the same
+  second** are not ordered at all: dpkg falls back to the hash, which is to say
+  to chance. A **backdated** committer date is ordered, just the wrong way round
+  — dpkg compares the timestamps and puts the later commit below its parent. A
+  genuine count would need the full history, and a `--depth 1` clone does not
+  have it.
 - The **fixed hash length** is what makes the version reproducible. Git derives
   its automatic abbreviation from the number of objects in the repository, so
   the same commit would be seven characters in CI's shallow clone and ten in a
-  developer's full one.
+  developer's full one. `--short=10` is not enough for that, being only a
+  minimum: git widens it as soon as ten characters are ambiguous. The full
+  object id is sliced instead.
 - `~dirty` marks a build from a modified tree. The tilde sorts *below* the clean
   build in Debian's ordering; a plus sign would sort above it, and a patched CI
-  build would then outrank the release it came from.
+  build would then outrank the release it came from. The numbers are read from
+  the commit rather than the worktree — otherwise an edited `configure.ac` would
+  raise the version and the patched artifact would overtake the release despite
+  `~dirty`.
+- Both `--assume-unchanged` and `--skip-worktree` tell git to stop looking at a
+  file. The check looks anyway, so a tree whose patch hides behind either bit is
+  still `~dirty` — otherwise the build would take the name of the release it was
+  patched away from. The one thing that stays ignored is a file `--skip-worktree`
+  says is deliberately not there: that is what a sparse checkout produces, and a
+  sparse checkout must not disagree with a full clone of the same commit. A file
+  *deleted* behind `--assume-unchanged` is a modification like any other, because
+  that bit only promises that a file which is there will not change.
 
 Two forms are derived from it. The **package version** keeps the `+`, because
 that is what dpkg expects, and carries no hyphen so dpkg cannot mistake part of
-it for a Debian revision. The **file name** replaces the `+` with a `.`:
-`Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`. Release
-asset uploads mangle special characters, and a `+` read as a space leaves the
-download link pointing at nothing.
+it for a Debian revision. The **file name** replaces the `+` with a `.` and, for
+a modified tree, the tilde with a hyphen:
+`Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`, or
+`…g13ae2fa8b8-dirty…`. Release asset uploads mangle special characters, and a
+`+` read as a space leaves the download link pointing at nothing.
 
 A source tree without `.git` — an export or tarball — reports the bare
-`<major>.<minor>.<micro>`. A `.git` that exists but cannot be used is a
-different matter and aborts the build: the bare version sorts below every real
-package and would never be offered as an upgrade, so guessing one silently is
-worse than stopping.
+`<major>.<minor>.<micro>`. Anything else that makes git unusable aborts the
+build: a `.git` git cannot read, a `.git` symlink pointing nowhere, an unreadable
+index, a missing commit object. That includes the case where git *skips* the
+`.git` during discovery and answers with the enclosing worktree instead —
+`sources/neutrino` is cloned inside this repository's worktree, and an
+interrupted clone leaves exactly such a half-written `.git`. The bare version
+sorts below every real package and would never be offered as an upgrade, so
+guessing one silently is worse than stopping.
 
 The `git_tag` field in the JSON is informational only and is deliberately **not**
-reproducible: a shallow clone has no tags to describe against. That is precisely
-why it no longer decides any name.
+reproducible: a shallow clone carries no history behind HEAD, so `git describe`
+answers only when a tag sits on the fetched commit itself, and otherwise not at
+all. That is precisely why it no longer decides any name.
 
 One consequence worth knowing: because the Neutrino source is cloned with
 `--depth 1`, `configure.ac`'s own `ver_git` — shown as the VCS line under *Image
@@ -181,8 +224,10 @@ the history between HEAD and the tag, which a shallow clone does not have.
     has to be installed, on the build host or on the target. A target without any
     `fusermount` prints a line starting with `Error:` and then extracts itself to
     a temporary directory and runs anyway.
-  - `dpkg-deb` (usually from `dpkg-dev`) for Debian packages.
-  - `python3` for `scripts/version_info.sh` (already covered by `make deps`).
+  - `dpkg-deb` (part of the `dpkg` package) for Debian packages.
+  - `python3` for the packaging scripts that read `scripts/version_info.sh`'s
+    JSON — `make_deb.sh`, `gen_appimage.sh`, `static_link.sh`. `version_info.sh`
+    itself does not need it. Already covered by `make deps`.
 - Packaging targets can be executed without root, but installing the resulting artifacts almost always needs elevated privileges.
 - To run everything in one go: `make package-appimage package-deb package-static`.
 Note: The previous container workflow has been removed; all targets run on the host.
@@ -290,7 +335,7 @@ All variables can be overridden on the command line (`make PACKAGE_VERSION=3.30.
 | `NEUTRINO_APPIMAGE_STATE` | `${XDG_DATA_HOME:-~/.local/share}/neutrino-appimage` | AppImage (runtime) | Where the finished package keeps its configuration. Read by AppRun, not by the build. |
 | `APPIMAGE_VERIFY_IMAGE` | `debian:13` | Verification | Container image the package is started in. |
 | `APPIMAGE_VERIFY_CONTAINER` | `1` | Verification | Set to `0` to run only the static checks, without starting the package. |
-| `APPIMAGE_BUNDLE_GSTREAMER` | `1` | AppImage | Set to `0` to leave the GStreamer modules out. Much smaller, but playback then needs GStreamer on the target. |
+| `APPIMAGE_BUNDLE_GSTREAMER` | `1` if `LIBSTB_HAL_CONFIGURE_FLAGS` enables GStreamer the way configure reads it — `--enable-gstreamer` or `=yes`, last option winning — else `0` | AppImage | Follows the build. Setting `0` on a build compiled with `--enable-gstreamer` leaves the modules out — much smaller, and playback then needs GStreamer on the target. On the default build there is no playback code to serve, so the target needs nothing. |
 | `NEUTRINO_NAME` | `Neutrino` | AppImage | Prefix for the produced `Neutrino_<version>_<arch>.AppImage`. |
 | `PACKAGE_NAME` | `neutrino-generic-pc` | Debian | Debian package name (`Package:` field and filename). |
 | `PACKAGE_VERSION` | derived from git | Debian | Version string; override for release builds (e.g. `PACKAGE_VERSION=3.30.0`). |
@@ -317,18 +362,18 @@ make PACKAGE_VERSION=3.30.0 \
 ## Common pitfalls
 
 - **`appimagetool not found`**: Run `scripts/ensure_appimagetool.sh` (invoked automatically by `make package-appimage`) or download from https://appimage.github.io/AppImageKit/ and add to `PATH`.
-- **`dpkg-deb` missing**: Install the `dpkg-dev` package.
+- **`dpkg-deb` missing**: Install the `dpkg` package (not `dpkg-dev` — `dpkg-deb` ships with `dpkg`).
 - **Static build fails**: Ensure dependencies support `--enable-static` (switching to musl may help).
 
 See `docs/README.en.md` for a broader overview.
 
 ## Installing and launching generated artifacts
 
-- **AppImage** (e.g. `Neutrino_0a129a0-x86_64.AppImage`)
+- **AppImage** (e.g. `Neutrino_2026.8.27.git20260815065207.g13ae2fa8b8_x86_64.AppImage`)
   1. Copy the AppImage to the target machine.
-  2. Make it executable: `chmod +x Neutrino_<version>-<arch>.AppImage`.
-  3. Run (root recommended for device access): `sudo ./Neutrino_<version>-<arch>.AppImage`. Use `ALLOW_NON_ROOT=1` only if you accept limited device support.
+  2. Make it executable: `chmod +x Neutrino_<version>_<arch>.AppImage`.
+  3. Run (root recommended for device access): `sudo ./Neutrino_<version>_<arch>.AppImage`. Without root, Neutrino starts but has no access to DVB and input devices. (`ALLOW_NON_ROOT=1` belongs to the `make run` wrappers and does nothing for an AppImage.)
 
-- **Debian package** (e.g. `neutrino-generic-pc_3.25.0+git0a129a0_amd64.deb`)
+- **Debian package** (e.g. `neutrino-generic-pc_2026.8.27.git20260815065207.g13ae2fa8b8_amd64.deb`)
   1. Install via `sudo apt install ./neutrino-generic-pc_<version>_<arch>.deb`.
   2. The binary is deployed under `/usr/bin/neutrino`; start with `sudo neutrino` (or create a service/unit as desired). Post-install script prints reminders about root/device requirements.

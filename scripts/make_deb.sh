@@ -31,7 +31,7 @@ if [[ -z "${INSTALL_DIR}" || ! -d "${INSTALL_DIR}" ]]; then
 fi
 
 if ! command -v dpkg-deb >/dev/null 2>&1; then
-  echo "[deb] dpkg-deb missing. Install the dpkg-dev package." >&2
+  echo "[deb] dpkg-deb missing. Install the dpkg package (dpkg-deb ships with it)." >&2
   exit 1
 fi
 
