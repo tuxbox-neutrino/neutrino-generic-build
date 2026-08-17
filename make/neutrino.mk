@@ -44,7 +44,7 @@ NEUTRINO_STATIC_STAMP := $(NEUTRINO_BUILD_DIR_STATIC)/.installed-static
 # the correct (GStreamer) header — without this define neutrino compiles against
 # the smaller playback_lib.h layout while linking the GStreamer implementation,
 # causing a fatal object-size mismatch (ODR violation / heap overflow).
-NEUTRINO_GSTREAMER_FLAGS = $(if $(findstring --enable-gstreamer,$(LIBSTB_HAL_CONFIGURE_FLAGS)),-DENABLE_GSTREAMER=1)
+NEUTRINO_GSTREAMER_FLAGS = $(if $(LIBSTB_HAL_GSTREAMER),-DENABLE_GSTREAMER=1)
 
 NEUTRINO_CFLAGS_ALL = $(strip $(NEUTRINO_BASE_CFLAGS) $(NEUTRINO_WARN_OPTS) $(NEUTRINO_CFLAGS_APPEND) $(SANITIZER_FLAGS) $(NEUTRINO_GSTREAMER_FLAGS))
 NEUTRINO_CXXFLAGS_ALL = $(strip $(NEUTRINO_BASE_CFLAGS) $(NEUTRINO_WARN_OPTS) $(NEUTRINO_WARN_OPTS_CXX) $(NEUTRINO_CXXFLAGS_APPEND) $(SANITIZER_FLAGS) $(NEUTRINO_GSTREAMER_FLAGS))

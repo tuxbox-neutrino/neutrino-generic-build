@@ -37,8 +37,9 @@ APPIMAGE_PREFIX_MAP ?= -ffile-prefix-map=$(ROOT_DIR)=.
 # when pkg-config finds no plugin directory. With the repository's own default
 # flags libstb-hal is built without GStreamer and no such directory exists, so
 # `make package-appimage` failed on a fresh checkout while working on a machine
-# that happened to have the development files. Same switch as neutrino.mk reads.
-APPIMAGE_BUNDLE_GSTREAMER ?= $(if $(findstring --enable-gstreamer,$(LIBSTB_HAL_CONFIGURE_FLAGS)),1,0)
+# that happened to have the development files. Same derived switch as
+# neutrino.mk reads, defined once in env-derive.mk.
+APPIMAGE_BUNDLE_GSTREAMER ?= $(if $(LIBSTB_HAL_GSTREAMER),1,0)
 
 .PHONY: package-appimage-stage
 # The dependency stamps live under BUILD_DIR, which this target does not

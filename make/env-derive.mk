@@ -54,3 +54,16 @@ export PLUGIN_PKG_CONFIG_SYSROOT_DIR PLUGIN_PKG_CONFIG_PATH PLUGIN_PROGRAM_PREFI
 export PLUGIN_PROGRAM_SUFFIX PLUGIN_PROGRAM_TRANSFORM_NAME PLUGIN_PROGRAM_NAME
 
 .EXPORT_ALL_VARIABLES:
+
+# Autoconf semantics rather than substring matching. libstb-hal enables
+# GStreamer only when the resolved value is exactly "yes" -- its configure.ac
+# tests `test "$$enable_gstreamer" = "yes"` -- so `--enable-gstreamer=no` and
+# `--disable-gstreamer` are off, `--enable-gstreamer=1` is off too, and the last
+# of these options on the line wins. `findstring --enable-gstreamer` read
+# `--enable-gstreamer=no` as on: the package was asked to bundle GStreamer that
+# was never built, and Neutrino was compiled with -DENABLE_GSTREAMER=1 against a
+# libstb-hal without it -- the object-size mismatch that define exists to
+# prevent. Recursive on purpose, because Makefile.local.post can still change
+# the flags.
+LIBSTB_HAL_GSTREAMER_OPT = $(lastword $(filter --enable-gstreamer --enable-gstreamer=% --disable-gstreamer,$(LIBSTB_HAL_CONFIGURE_FLAGS)))
+LIBSTB_HAL_GSTREAMER = $(if $(filter --enable-gstreamer --enable-gstreamer=yes,$(LIBSTB_HAL_GSTREAMER_OPT)),1,)

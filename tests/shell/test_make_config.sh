@@ -53,6 +53,8 @@ ${TAB}@printf 'N_LUAPLUGIN_DIR=%s\n' '\$(N_LUAPLUGIN_DIR)'
 ${TAB}@printf 'CFLAGS_APPEND=[%s]\n' '\$(NEUTRINO_CFLAGS_APPEND)'
 ${TAB}@printf 'PYTHON=%s\n' '\$(PYTHON)'
 ${TAB}@printf 'W164_POST=[%s]\n' '\$(W164_POST)'
+${TAB}@printf 'GST_BUNDLE=%s\n' '\$(APPIMAGE_BUNDLE_GSTREAMER)'
+${TAB}@printf 'GST_DEFINE=[%s]\n' '\$(NEUTRINO_GSTREAMER_FLAGS)'
 EOF
 
 # Run the probe with the given Makefile.local body (empty string = none) and
@@ -75,6 +77,36 @@ if [ "$val" = "help" ]; then
 else
 	ko "the default goal is help, not a silent no-op" "got '$val'"
 fi
+
+# --- GStreamer: the switch has to follow configure, not a substring ---------
+# libstb-hal enables GStreamer only for the resolved value "yes", so
+# --enable-gstreamer=no and --disable-gstreamer are off and the last option
+# wins. A `findstring --enable-gstreamer` said yes to all of them: the AppImage
+# was asked to bundle modules that were never built, and Neutrino got
+# -DENABLE_GSTREAMER=1 against a libstb-hal compiled without it, which is the
+# object-size mismatch make/neutrino.mk warns about right above the flag.
+gst_case() { # $1 = flags, $2 = expected bundle (0/1)
+	gst_body="LIBSTB_HAL_CONFIGURE_FLAGS := $1"
+	gst_bundle="$(probe "$gst_body" GST_BUNDLE)"
+	gst_define="$(probe "$gst_body" GST_DEFINE)"
+	if [ "$2" = 1 ]; then
+		gst_want_define="[-DENABLE_GSTREAMER=1]"
+	else
+		gst_want_define="[]"
+	fi
+	if [ "$gst_bundle" = "$2" ] && [ "$gst_define" = "$gst_want_define" ]; then
+		ok "GStreamer stays $2 for '$1'"
+	else
+		ko "GStreamer stays $2 for '$1'" \
+			"bundle='$gst_bundle' want '$2', define='$gst_define' want '$gst_want_define'"
+	fi
+}
+gst_case "--enable-gstreamer" 1
+gst_case "--enable-gstreamer=yes" 1
+gst_case "--enable-gstreamer=no" 0
+gst_case "--disable-gstreamer" 0
+gst_case "--enable-gstreamer --disable-gstreamer" 0
+gst_case "--disable-gstreamer --enable-gstreamer" 1
 
 # --- H2: a local TOOLCHAIN_GCC_VERSION reaches the compiler selection -----
 cc="$(probe 'TOOLCHAIN_GCC_VERSION := 15' CC)"
@@ -209,6 +241,23 @@ case "$post_val" in
 	*)
 		ko "Makefile.local.post resolves a variable defined by a later module" "got '$post_val'" ;;
 esac
+
+# The derived GStreamer switch is deliberately recursive, so that a
+# Makefile.local.post -- read after the module that defines it -- still reaches
+# it. Written `:=` it is computed at include time, silently ignores that file,
+# and turns a GStreamer build back into a non-GStreamer one; nothing else in
+# this suite notices, because every other case sets the flags in Makefile.local.
+rm -f "$WORK/Makefile.local"
+printf 'LIBSTB_HAL_CONFIGURE_FLAGS := --enable-gstreamer\n' > "$WORK/Makefile.local.post"
+post_gst="$( cd "$WORK" && run_make -s -f probe.mk w164-probe 2>/dev/null | sed -n 's/^GST_BUNDLE=//p' )"
+post_gst_def="$( cd "$WORK" && run_make -s -f probe.mk w164-probe 2>/dev/null | sed -n 's/^GST_DEFINE=//p' )"
+rm -f "$WORK/Makefile.local.post"
+if [ "$post_gst" = 1 ] && [ "$post_gst_def" = "[-DENABLE_GSTREAMER=1]" ]; then
+	ok "a Makefile.local.post flag still reaches the GStreamer switch"
+else
+	ko "a Makefile.local.post flag still reaches the GStreamer switch" \
+		"bundle='$post_gst' want 1, define='$post_gst_def' want [-DENABLE_GSTREAMER=1]"
+fi
 
 printf -- '----\n'
 printf '[test-make-config] pass=%s fail=%s\n' "$pass" "$fail"
