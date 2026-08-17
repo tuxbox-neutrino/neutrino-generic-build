@@ -56,11 +56,16 @@ export NEUTRINO_EXIT_CODES="${NEUTRINO_EXIT_CODES:-posix}"
 
 # Prevent multiple instances — avoids config corruption (e.g. lost satellite settings)
 # Use pgrep -x to match only the exact process name (not paths containing "neutrino")
+#
+# Not `exit 1`: 1, 2 and 3 are the legacy exit codes for poweroff, reboot and
+# restart, so neutrino_run_report.sh decoded this refusal as a clean shutdown --
+# `make run` printed "Neutrino requested shutdown" and exited 0 for a Neutrino
+# that never started. 75 is EX_TEMPFAIL: try again once the other one is gone.
 existing_pid="$(pgrep -x neutrino.real 2>/dev/null | head -1 || true)"
 if [[ -n "$existing_pid" ]]; then
   echo "[run-neutrino] ERROR: Neutrino is already running (PID $existing_pid)." >&2
   echo "[run-neutrino] Stop the existing instance first or use 'kill $existing_pid'." >&2
-  exit 1
+  exit 75
 fi
 
 exec "$NEUTRINO_BIN" "$@"

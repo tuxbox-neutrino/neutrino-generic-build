@@ -14,12 +14,21 @@ set -euo pipefail
 
 bin_dir="$(cd "$(dirname "$0")" && pwd)"
 real_bin="$bin_dir/neutrino.real"
+# Both refusals below happen before Neutrino runs, so neither may exit 1, 2
+# or 3: those are its legacy poweroff/reboot/restart codes, and
+# scripts/neutrino_run_report.sh would decode them as a clean shutdown and
+# let `make run` exit 0 for a Neutrino that never started. 69 is
+# EX_UNAVAILABLE.
 if [[ ! -x "$real_bin" ]]; then
   echo "[neutrino-wrapper] Missing binary: $real_bin" >&2
-  exit 1
+  exit 69
 fi
 
-runtime_lib="$(cd "$bin_dir/../lib" && pwd)"
+# A plain `cd` would abort here under `set -e` with exactly that bare 1.
+if ! runtime_lib="$(cd "$bin_dir/../lib" 2>/dev/null && pwd)"; then
+  echo "[neutrino-wrapper] Missing runtime libraries: $bin_dir/../lib" >&2
+  exit 69
+fi
 search_paths=("$runtime_lib" "$runtime_lib/c" "$runtime_lib/t")
 ld_path=""
 for p in "${search_paths[@]}"; do

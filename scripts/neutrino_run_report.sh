@@ -6,7 +6,8 @@
 # an action file; older binaries only encode it in the exit status (1=poweroff,
 # 2=reboot, 3=restart). This helper reads the action file, falls back to the
 # legacy exit-code mapping when it is missing, prints a human-readable line, and
-# exits 0 for any clean shutdown or <rc> for a genuine error. It is the shared
+# exits 0 for any clean shutdown or <rc> for a genuine error -- including the
+# codes the wrappers use when Neutrino never started (75, 69). It is the shared
 # implementation behind the run-direct and run-nspawn targets and is unit-tested
 # by tests/shell/test_neutrino_run_report.sh.
 #
@@ -31,6 +32,16 @@ if [ -z "$action" ]; then
 		2) action=reboot ;;
 		3) action=restart ;;
 	esac
+fi
+
+# Neutrino never ran: 75 (EX_TEMPFAIL) is the guard refusing a second instance,
+# 69 (EX_UNAVAILABLE) the staged wrapper missing its binary or its runtime
+# libraries. Both have to be told apart from a shutdown action -- they used to
+# exit 1, which the legacy mapping above read as poweroff, so a refusal was
+# reported as a clean shutdown at exit 0.
+if [ "$rc" = 75 ] || [ "$rc" = 69 ]; then
+	echo "[$label] Neutrino did not start (see the message above)"
+	exit "$rc"
 fi
 
 case "$action" in
