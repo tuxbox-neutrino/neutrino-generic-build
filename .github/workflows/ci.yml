@@ -9,6 +9,11 @@ on:
     # a branch out here means pull requests against it get no CI at all.
     branches: [master]
   workflow_dispatch:
+    inputs:
+      archive:
+        description: 'Keep this build: publish it as a permanent release as well'
+        type: boolean
+        default: false
   # No schedule. It fires only from the default branch, so it never ran while
   # this file lived on dx; now that it sits on master it would wake up and
   # build nightly for no reason. A nightly worth having watches the Neutrino
@@ -21,8 +26,15 @@ concurrency:
   # an hour -- cancellation happens here, at run level, and a job-level group
   # cannot prevent it.
   group: ci-${{ github.ref }}-${{ github.event_name }}
-  # Only the cheap triggers supersede themselves. A dispatch or a tag build is
-  # never thrown away; a second one waits instead.
+  # Only the cheap triggers supersede themselves: a running dispatch or tag
+  # build is never thrown away.
+  #
+  # A waiting one can be. GitHub holds at most one pending run per group, so a
+  # third dispatch submitted while one runs and one waits replaces the waiting
+  # one -- cancel-in-progress: false governs the running run, not the queue.
+  # Dispatches are manual and rare, so the answer is to know this rather than to
+  # build a queue around it: if the replaced run was the one asked to archive,
+  # dispatch it again.
   cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
 
 permissions:
@@ -153,6 +165,14 @@ jobs:
     # artefact handed to a separate job for verification.
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # No write permission here, deliberately. This job clones and executes
+    # autogen.sh, configure scripts and Makefiles from two moving branch tips,
+    # and actions/checkout leaves a push credential in .git/config -- a write
+    # token in this job would put this repository's branches and tags within
+    # reach of whatever those tips happen to contain. Publishing runs in a job
+    # of its own, below, which executes none of that.
+    outputs:
+      archive_tag: ${{ steps.archive_tag.outputs.tag }}
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
     steps:
@@ -199,6 +219,17 @@ jobs:
           name: appimage
           path: artifacts/appimage/*.AppImage
           if-no-files-found: warn
+      # Named in this job, not in the publishing one: the tag carries the
+      # libstb-hal commit, and libstb-hal exists only in this workspace -- the
+      # publishing job checks nothing out on purpose. Run on every build rather
+      # than only when archiving, so a name the script cannot form fails the
+      # build that broke it instead of the first archive months later.
+      - name: Name the archive tag
+        id: archive_tag
+        run: |
+          tag="$(scripts/release_tag.sh "$GITHUB_SHA")"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "archive tag for this build: $tag"
       - name: Upload build logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -208,3 +239,69 @@ jobs:
             **/config.log
             logs/**
           if-no-files-found: ignore
+
+  publish:
+    name: Publish the AppImage
+    needs: appimage
+    # workflow_dispatch lets the caller pick any ref, and the file being on the
+    # default branch only decides whether the button appears -- not what it
+    # runs. Without the branch test a dispatch from a feature branch would force
+    # the public latest tag onto that commit and replace the assets of a release
+    # whose notes say "of master".
+    #
+    # Tag pushes deliberately publish nothing yet: what a version number of this
+    # repository should mean is still open, and a release hung on a tag would
+    # answer that by accident. `needs` carries the rest -- a build that failed
+    # verification never reaches this job, so nothing here has to ask for
+    # success() by hand.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    # The reason this is a job of its own: it is the only place with a write
+    # token, and it runs none of the code the build job clones. What it checks
+    # out is this repository at the commit being published; the package arrives
+    # as an artefact, and everything else is the GitHub API.
+    #
+    # A job that names permissions gets none of the ones it leaves out, so both
+    # belong here: contents for the releases and the tag, actions for reading
+    # the artefact back out of this run.
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      # persist-credentials: false because nothing here talks to git: gh
+      # authenticates with GH_TOKEN, and a push credential left behind in
+      # .git/config would only be one more thing that can leak. What is checked
+      # out is this repository's own scripts at the commit being published --
+      # the moving branch tips the build job clones never reach this job.
+      # Pinned to commits, unlike everywhere else in this file, because this is
+      # the job that holds a write token. `persist-credentials: false` keeps the
+      # token out of .git/config, but checkout is still handed it, and a `v4`
+      # tag is a moving target: whoever can retarget it runs code here with that
+      # token. A full sha cannot be retargeted. Resolved 2026-08-20;
+      # 11d5960 is checkout v4.4.0 and d3f86a1 is download-artifact v4.3.0.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Collect the built AppImage
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: appimage
+          path: artifacts/appimage
+      # Checksummed here rather than carried over from the build, so the file
+      # described is the file being published -- not one that looked the same
+      # in another job.
+      - name: Checksum the AppImage
+        run: scripts/publish_release.sh checksum
+      - name: Publish as the rolling latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/publish_release.sh latest
+      # Only when asked for. Archiving every run would turn the release list
+      # into a build log, and the package name alone cannot tell two builds
+      # apart -- scripts/release_tag.sh explains what the tag has to name.
+      - name: Archive this build permanently
+        if: inputs.archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_TAG: ${{ needs.appimage.outputs.archive_tag }}
+        run: scripts/publish_release.sh archive

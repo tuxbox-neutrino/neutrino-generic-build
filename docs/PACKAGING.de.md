@@ -215,6 +215,95 @@ lokaler Bau `v2026.8-32-g13ae2fa8b8` anzeigt. Tags nachzuholen behebt das nicht;
 `git describe` braucht die Historie zwischen HEAD und Tag, und die hat ein
 flacher Klon nicht.
 
+### Wie ein Release benannt wird
+
+Der Name oben beschreibt **Neutrino**, nicht dieses Repo: alle drei Bestandteile
+stammen aus Neutrinos `configure.ac` und Neutrinos HEAD. Für den Dateinamen ist
+das richtig — die Frage eines Nutzers lautet, welches Neutrino drinsteckt.
+
+Fürs Archiv reicht es nicht. Zwei Bauten desselben Neutrino-Commits heißen
+gleich, auch wenn dazwischen ffmpeg, libstb-hal oder das Packaging gewechselt
+haben. Ein dauerhaftes Release allein auf diesen Namen zu setzen hieße, zwei
+verschiedene Pakete unter ein Etikett zu stellen.
+
+`scripts/release_tag.sh` benennt deshalb jede **Quell**-Eingabe, die sich
+bewegen kann:
+
+```
+build/<slug>-<Buildsystem-Commit>-hal<libstb-hal>-dvbsi<libdvbsi++>[-dirty]
+```
+
+Der Slug sagt, welches Neutrino drin ist; der Buildsystem-Commit sagt, was es
+gebaut hat — Packaging, Rezepte, Patches. Die letzten beiden Teile sind nötig,
+weil libstb-hal und libdvbsi++ die beiden Abhängigkeiten sind, die **nicht
+gepinnt** sind: `make/neutrino.mk` klont `LIBSTB_HAL_GIT_REF` (`mpx`) an der
+Spitze, `make/deps.mk` klont `DVBSI_GIT_REF` (`master`) an der Spitze. Beider
+Inhalt kann sich ändern, ohne dass ein anderer Teil sich bewegt. ffmpeg braucht
+keinen eigenen Teil, `make/third_party/ffmpeg.mk` pinnt eine Version.
+
+Beide Teile lesen `sys`, wenn es gar keinen Checkout gibt: `make/neutrino.mk`
+und `make/deps.mk` überspringen den Bau, sobald der Host bereits eine passende
+Bibliothek mitbringt, und eine Systembibliothek lässt sich nicht durch einen
+Commit benennen. Verweigert wird das nicht — so ein Bau ist gültig, nur eben
+nicht allein durch Commits beschreibbar. In CI gibt es immer beide Checkouts.
+
+Wird kein Commit übergeben, nimmt das Skript HEAD. `-dirty` steht am Ende,
+sobald einer der beiden Arbeitsbäume verändert ist — aus demselben Grund, aus
+dem oben `~dirty` existiert. Ungetrackte Dateien zählen dabei nicht als
+Änderung; ein fremder Plugin-Checkout neben den Quellen ändert nichts am
+Gebauten. Eine Ausnahme gibt es: `Makefile.local` und `Makefile.local.post`
+sind ebenfalls ungetrackt, werden von `make/main.mk` aber in jeden Bau
+eingelesen — wer dort den Compiler oder ffmpeg umstellt, baut etwas anderes,
+als die Commits im Tag beschreiben. Ihre bloße Anwesenheit genügt deshalb für
+`-dirty`.
+
+Nicht benannt wird die **Maschine**. CI baut auf `ubuntu-latest` und
+installiert Hostpakete ungepinnt; GitHub erneuert dieses Image wöchentlich, und
+die ABI-Untergrenze weiter oben hängt genau daran. Dieselben drei Commits
+können Monate später also andere Bytes ergeben, und ein siebenstelliges
+Commit-Präfix kann im Prinzip kollidieren. Beides ist bewusst nicht im Tag
+gelöst — einen Tag, der ein Runner-Image benennt, liest niemand mehr.
+Stattdessen schließt der Archivschritt die Lücke am anderen Ende:
+`scripts/publish_release.sh` vergleicht die unter dem Tag bereits
+veröffentlichte `SHA256SUMS` mit der gerade gebauten und bricht bei Abweichung
+ab. So fällt auf, was sonst still den zuerst hochgeladenen Bau behalten hätte.
+
+Das rollende `latest`-Release braucht nichts davon: es wird bei jedem
+veröffentlichenden Lauf überschrieben. Nur das Archiv muss unterscheidbar
+bleiben.
+
+### Wann veröffentlicht wird
+
+Nur ein `workflow_dispatch` auf `master`. Pushes, Pull Requests und Tag-Pushes
+bauen zwar, veröffentlichen aber nichts: was eine Versionsnummer dieses Repos
+bedeuten soll, ist offen, und ein Release an einem Tag würde das nebenbei
+beantworten. Der Dispatch hat einen Schalter `archive` (Vorgabe: aus). Ohne ihn
+wird nur `latest` ersetzt, mit ihm entsteht zusätzlich das dauerhafte Release
+unter dem Tag von oben.
+
+Vier Dinge, die man wissen sollte, weil sie sich nicht wegprogrammieren lassen:
+
+- GitHub hält pro Gruppe höchstens **einen** wartenden Lauf. Ein dritter
+  Dispatch, während einer läuft und einer wartet, ersetzt den wartenden — samt
+  dessen `archive`-Wunsch. Dann einfach noch einmal auslösen. Die Gruppe nach
+  `archive` aufzuteilen würde das verhindern, ließe aber zwei Läufe gleichzeitig
+  `latest` veröffentlichen, wo der eine das Paket des anderen wegräumt. Der
+  schlechtere Tausch.
+- Ein Asset lässt sich nicht an Ort und Stelle ersetzen; `gh` löscht das
+  gleichnamige zuerst. Deshalb geht das Paket zuerst hoch, der Tag zieht danach
+  nach, aufgeräumt wird zuletzt. Scheitert etwas dazwischen, bleibt im
+  Regelfall ein überholtes AppImage zu viel liegen. Zwei Ausnahmen betreffen
+  Namen, die sich nicht ändern: wurde derselbe Neutrino-Commit mit anderen
+  Bytes gebaut, trägt das Paket denselben Namen und fehlt bis zum nächsten
+  Lauf; und `SHA256SUMS` heißt immer gleich, scheitert der Lauf genau dort,
+  liegen die Pakete ohne Prüfsumme da. Rot ist der Lauf in jedem Fall, und der
+  nächste räumt auf.
+- Alle Commits im Tag sind auf sieben Zeichen gekürzt. Teilen sich zwei
+  Commits derselben Abhängigkeit dieses Präfix, kollidiert der Tag. Das
+  Ergebnis ist dann eine **Verweigerung** des zweiten Archivs, kein falsches:
+  der Prüfsummenvergleich schlägt an, bevor etwas hochgeladen wird.
+- Ein erneuter Dispatch eines unveränderten Baus lädt gar nichts hoch.
+
 ## Vorbereitung
 
 - Vor dem Paketieren mindestens einmal `make neutrino` ausführen, damit das Sysroot `artifacts/sysroot` gefüllt ist.  

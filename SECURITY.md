@@ -6,8 +6,17 @@
   all pull requests and all security fixes land here, and it is the branch this
   documentation describes.
 
-There are no releases yet, so there is nothing to back-port to. Once tagged
-releases exist, back-ports will be agreed case by case.
+Builds are published as GitHub releases by a `workflow_dispatch` on `master`;
+no other event publishes anything. `latest` is rolling and is replaced by every
+such run, so it carries no fix guarantee. Its AppImage filename names the
+Neutrino commit inside, which is what a report about Neutrino needs; the build
+system and libstb-hal commits are not in that name. If the problem is in the
+packaging, report against an archived `build/…` release instead — its tag
+carries all three. Archived releases stay put but are snapshots, not supported
+versions.
+
+There are no *tagged* releases yet, so there is nothing to back-port to. Once
+they exist, back-ports will be agreed case by case.
 
 ## Reporting a vulnerability
 

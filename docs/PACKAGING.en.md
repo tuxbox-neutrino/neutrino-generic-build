@@ -209,6 +209,89 @@ information* — is a bare commit hash in a CI build, where a local build shows
 `v2026.8-32-g13ae2fa8b8`. Fetching tags does not fix this; `git describe` needs
 the history between HEAD and the tag, which a shallow clone does not have.
 
+### How a release is named
+
+The name above describes **Neutrino**, not this repository: all three parts come
+from Neutrino's `configure.ac` and Neutrino's HEAD. For a filename that is
+right — what a user wants to know is which Neutrino is inside.
+
+For an archive it is not enough. Two builds of the same Neutrino commit carry
+the same name even when ffmpeg, libstb-hal or the packaging changed in between.
+Keying a permanent release on that name alone would put two different packages
+under one label.
+
+`scripts/release_tag.sh` therefore names every **source** input that can move:
+
+```
+build/<slug>-<build commit>-hal<libstb-hal>-dvbsi<libdvbsi++>[-dirty]
+```
+
+The slug says which Neutrino is inside; the build system commit says what built
+it — packaging, recipes, patches. The last two parts are needed because
+libstb-hal and libdvbsi++ are the two dependencies that are **not pinned**:
+`make/neutrino.mk` clones `LIBSTB_HAL_GIT_REF` (`mpx`) at its tip and
+`make/deps.mk` clones `DVBSI_GIT_REF` (`master`) at its tip, so either can
+change without any other part moving. ffmpeg needs no part of its own;
+`make/third_party/ffmpeg.mk` pins a version.
+
+Either part reads `sys` where there is no checkout at all: `make/neutrino.mk`
+and `make/deps.mk` skip the build once the host already provides a matching
+library, and a system library cannot be named by a commit. That is not refused —
+such a build is valid, it just cannot be described by commits alone. CI always
+has both checkouts.
+
+With no commit passed in, the script takes HEAD. `-dirty` goes at the end as
+soon as either worktree is modified, for the same reason `~dirty` exists above.
+Untracked files do not count as a modification; somebody's plugin checkout
+sitting next to the sources changes nothing about what gets built. There is one
+exception: `Makefile.local` and `Makefile.local.post` are untracked as well, but
+`make/main.mk` reads them into every build — change the compiler or ffmpeg there
+and you build something other than what the commits in the tag describe. Their
+presence alone is therefore enough for `-dirty`.
+
+What the tag does not name is the **machine**. CI builds on `ubuntu-latest` and
+installs host packages unpinned; GitHub rebuilds that image weekly, and the ABI
+floor described above depends on exactly this. The same three commits can
+therefore yield different bytes months apart, and a seven-character commit
+prefix can collide in principle. Neither is solved in the tag, deliberately — a
+tag long enough to name a runner image is a tag nobody reads. The archive step
+closes the gap at the other end instead: `scripts/publish_release.sh` compares
+the `SHA256SUMS` already published under the tag with the one just built and
+stops on a mismatch. What would otherwise have silently kept whichever build was
+uploaded first now surfaces.
+
+The rolling `latest` release needs none of this — it is replaced on every
+publishing run. Only the archive has to stay distinguishable.
+
+### When publishing happens
+
+Only a `workflow_dispatch` on `master`. Pushes, pull requests and tag pushes do
+build, but publish nothing: what a version number of this repository should mean
+is still open, and a release hung on a tag would answer that by accident. The
+dispatch carries an `archive` switch, off by default. Without it only `latest` is
+replaced; with it the permanent release described above is created as well.
+
+Four things worth knowing, because none of them can be engineered away:
+
+- GitHub keeps at most **one** pending run per group. A third dispatch, while
+  one runs and one waits, replaces the waiting one — including its `archive`
+  request. Dispatch it again. Splitting the group on `archive` would prevent
+  that, but it would let two runs publish `latest` at the same time, one
+  pruning the other's package. That is the worse trade.
+- An asset cannot be replaced in place; `gh` deletes the same-named one first.
+  So the package goes up first, the tag follows, and pruning comes last. If
+  something fails in between, what is normally left behind is one superseded
+  AppImage too many. Two exceptions concern names that never change: a rebuild
+  of the same Neutrino commit with different bytes keeps the package's name and
+  is missing until the next run, and `SHA256SUMS` is always called that, so a
+  failure exactly there leaves the packages without a checksum. Either way the
+  run is red and the next one clears it.
+- Every commit in the tag is shortened to seven characters. Two commits of one
+  dependency sharing that prefix collide. What follows is a **refusal** of the
+  second archive, not a wrong one: the checksum comparison catches it before
+  anything is uploaded.
+- Re-dispatching an unchanged build uploads nothing at all.
+
 ## Preparation Checklist
 
 - Run `make neutrino` at least once before packaging so the staged sysroot `artifacts/sysroot` is populated.  
