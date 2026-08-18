@@ -2,17 +2,12 @@
 
 ## Supported branches
 
-- `dx`: Active development. All work, all pull requests and all security fixes
-  land here. This is the branch you want, and the one this documentation
-  describes.
-- `master`: The repository's default branch. It carries only the landing page
-  plus the historical standalone Makefile that predates this build system. It is
-  **not** a released or supported state and receives no security fixes.
+- `master`: The only long-lived branch, and the repository default. All work,
+  all pull requests and all security fixes land here, and it is the branch this
+  documentation describes.
 
-`dx` is deliberately not the default branch: `master` is what GitHub shows a
-first-time visitor, and it points them at `dx`.
-
-Backports to older releases only upon agreement.
+There are no releases yet, so there is nothing to back-port to. Once tagged
+releases exist, back-ports will be agreed case by case.
 
 ## Reporting a vulnerability
 

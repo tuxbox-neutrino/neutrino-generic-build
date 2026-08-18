@@ -22,7 +22,7 @@
 
 ### 1. Clone the repository
 ```bash
-git clone -b dx https://github.com/tuxbox-neutrino/neutrino-generic-build.git
+git clone https://github.com/tuxbox-neutrino/neutrino-generic-build.git
 cd neutrino-generic-build
 ```
 

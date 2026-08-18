@@ -1,6 +1,6 @@
-# Neutrino Generic Build (`dx` branch)
+# Neutrino Generic Build
 
-This branch hosts the revamped Make-based build, test, and packaging environment for Neutrino (generic-pc).
+This repository hosts the Make-based build, test, and packaging environment for Neutrino (generic-pc).
 Builds and tests now run directly on the host; the former Docker auto-wrapper is removed.
 
 ## What this is
@@ -27,7 +27,7 @@ interface reachable at <http://localhost:31344>.
 ## Try it
 
 ```bash
-git clone -b dx https://github.com/tuxbox-neutrino/neutrino-generic-build.git
+git clone https://github.com/tuxbox-neutrino/neutrino-generic-build.git
 cd neutrino-generic-build
 make deps-doctor      # check the host, changes nothing
                       # then run the install command it prints
