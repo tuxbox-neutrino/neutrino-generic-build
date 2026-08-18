@@ -2,20 +2,32 @@ name: CI
 
 on:
   push:
-    # ci-package exists to drive the AppImage job below. workflow_dispatch only
-    # offers the default branch's copy of this file, and this workflow does not
-    # live there yet, so pushing a branch is the one trigger available.
-    branches: [dx, ci-package]
+    # master is the branch the build system is moving to; dx and ci-package are
+    # listed only until that move is proven, then they go. ci-package exists to
+    # drive the AppImage job, which workflow_dispatch cannot do while this file
+    # is absent from the default branch.
+    branches: [master, dx, ci-package]
     tags: ['v*']
   pull_request:
-    branches: [dx]
+    # A second, independent filter: it matches a pull request's *base*. Leaving
+    # a branch out here means pull requests against it get no CI at all.
+    branches: [master, dx]
   workflow_dispatch:
-  schedule:
-    - cron: "0 3 * * *"
+  # No schedule. It fires only from the default branch, so it never ran while
+  # this file lived on dx; once the file reaches master it would wake up and
+  # build nightly for no reason. A nightly worth having watches the Neutrino
+  # and libstb-hal sources and builds when they move.
 
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Keyed on the event as well as the ref. With one branch a push and a
+  # workflow_dispatch carry the same github.ref, so keying on the ref alone
+  # would let a one-line README push cancel a package build that runs for over
+  # an hour -- cancellation happens here, at run level, and a job-level group
+  # cannot prevent it.
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  # Only the cheap triggers supersede themselves. A dispatch or a tag build is
+  # never thrown away; a second one waits instead.
+  cancel-in-progress: ${{ github.event_name == 'push' || github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -73,10 +85,10 @@ jobs:
   build:
     name: Build (${{ matrix.slug }})
     if: >-
-      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     container: ${{ matrix.image }}
     continue-on-error: ${{ matrix.experimental }}
     env:
@@ -130,7 +142,6 @@ jobs:
     needs: shell
     if: >-
       github.ref == 'refs/heads/ci-package' ||
-      github.event_name == 'schedule' ||
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.ref, 'refs/tags/')
     # Deliberately not a container job, unlike build above. The verification step
