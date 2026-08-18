@@ -2,19 +2,15 @@ name: CI
 
 on:
   push:
-    # master is the branch the build system is moving to; dx and ci-package are
-    # listed only until that move is proven, then they go. ci-package exists to
-    # drive the AppImage job, which workflow_dispatch cannot do while this file
-    # is absent from the default branch.
-    branches: [master, dx, ci-package]
+    branches: [master]
     tags: ['v*']
   pull_request:
     # A second, independent filter: it matches a pull request's *base*. Leaving
     # a branch out here means pull requests against it get no CI at all.
-    branches: [master, dx]
+    branches: [master]
   workflow_dispatch:
   # No schedule. It fires only from the default branch, so it never ran while
-  # this file lived on dx; once the file reaches master it would wake up and
+  # this file lived on dx; now that it sits on master it would wake up and
   # build nightly for no reason. A nightly worth having watches the Neutrino
   # and libstb-hal sources and builds when they move.
 
@@ -140,8 +136,10 @@ jobs:
     # better part of an hour and there is no point starting it behind a tree
     # that already fails in seconds.
     needs: shell
+    # With ci-package gone and no tags published yet, workflow_dispatch is the
+    # only way to a package. Any input added here must therefore not default to
+    # switching this job off.
     if: >-
-      github.ref == 'refs/heads/ci-package' ||
       github.event_name == 'workflow_dispatch' ||
       startsWith(github.ref, 'refs/tags/')
     # Deliberately not a container job, unlike build above. The verification step
