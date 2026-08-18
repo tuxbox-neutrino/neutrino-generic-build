@@ -24,6 +24,11 @@ trap 'rm -rf "$WORK"' EXIT
 AF="$WORK/exit-action"
 pass=0
 fail=0
+skip=0
+
+# Counted, not dropped: a precondition that quietly removes an assertion turns
+# a shrinking suite into a green one.
+sk() { skip=$((skip + 1)); printf 'skip %-46s %s\n' "$1" "$2"; }
 
 # run_case <desc> <file-content|__none__> <rc> <want-exit> <want-substr>
 run_case() {
@@ -87,6 +92,11 @@ if [ ! -x "$GUARD" ] || [ -z "$BASH_BIN" ]; then
 	fail=$((fail + 1))
 	printf 'FAIL %-46s %s\n' "the single-instance guard refuses with 75" \
 		"scripts/run-neutrino.sh or bash is missing"
+elif ! command -v pgrep >/dev/null 2>&1; then
+	# The guard asks pgrep whether another Neutrino is running, so without it
+	# there is no behaviour here to assert. run-neutrino.sh says so at runtime
+	# instead of reporting an all-clear; that is the part still worth having.
+	sk "the single-instance guard refuses with 75" "pgrep not available"
 else
 	# A real executable named neutrino.real, not `exec -a`: that only rewrites
 	# argv[0] while the kernel keeps `comm` as "sleep", and `pgrep -x` compares
@@ -202,5 +212,5 @@ run_case "unknown token, rc=0 -> clean"    frobnicate 0 0 ""
 run_case "unknown token, rc=255 -> error"  frobnicate 255 255 "exited with code 255"
 
 echo "----"
-echo "[test-shell] pass=$pass fail=$fail"
+echo "[test-shell] pass=$pass fail=$fail skip=$skip"
 [ "$fail" -eq 0 ]

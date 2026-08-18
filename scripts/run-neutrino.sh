@@ -61,7 +61,19 @@ export NEUTRINO_EXIT_CODES="${NEUTRINO_EXIT_CODES:-posix}"
 # restart, so neutrino_run_report.sh decoded this refusal as a clean shutdown --
 # `make run` printed "Neutrino requested shutdown" and exited 0 for a Neutrino
 # that never started. 75 is EX_TEMPFAIL: try again once the other one is gone.
-existing_pid="$(pgrep -x neutrino.real 2>/dev/null | head -1 || true)"
+#
+# Without pgrep there is nothing to ask, and `2>/dev/null || true` would turn
+# that into a silent all-clear: the second instance starts and the two
+# overwrite each other's configuration. Say so rather than pretend to have
+# looked. Not fatal, though -- the check is a safety net, and refusing to start
+# Neutrino over a missing procps would cost more than the risk it covers.
+if command -v pgrep >/dev/null 2>&1; then
+  existing_pid="$(pgrep -x neutrino.real 2>/dev/null | head -1 || true)"
+else
+  existing_pid=""
+  echo "[run-neutrino] WARNING: pgrep not found, cannot check for a running" >&2
+  echo "[run-neutrino] instance. Install procps (procps-ng on Fedora)." >&2
+fi
 if [[ -n "$existing_pid" ]]; then
   echo "[run-neutrino] ERROR: Neutrino is already running (PID $existing_pid)." >&2
   echo "[run-neutrino] Stop the existing instance first or use 'kill $existing_pid'." >&2

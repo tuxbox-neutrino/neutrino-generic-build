@@ -105,11 +105,17 @@ CORE_PACKAGES_APT+=("${NEUTRINO_DEPS_APT[@]}")
 # fails immediately after a plain `make deps`. It belongs in *both* lists -- an
 # apt-only entry left Fedora without it, and the AppImage suite failed there
 # while passing on every Debian and Ubuntu image in the same CI run.
+# procps (procps-ng on Fedora) supplies pgrep, which run-neutrino.sh asks
+# whether a Neutrino is already running before starting another one, and which
+# cleanup_runtime.sh uses to find leftovers. Neither is fatal without it -- both
+# say so and carry on -- but on a minimal Fedora image the single-instance
+# guard silently protected nothing, which is how the run-report suite found it.
 OPTIONAL_PACKAGES_APT=(
   python3-opencv python3-numpy tesseract-ocr libleptonica-dev
   xvfb x11-apps fbcat netpbm fonts-dejavu-core
   libevdev-dev evtest proot libfuse2
   appstream file desktop-file-utils squashfs-tools patchelf
+  procps
 )
 
 ENABLE_GSTREAMER="${ENABLE_GSTREAMER:-0}"
@@ -144,6 +150,7 @@ OPTIONAL_PACKAGES_DNF=(
   xorg-x11-server-Xvfb netpbm-progs dejavu-sans-fonts
   libevdev-devel evtest fuse fuse-libs
   appstream file desktop-file-utils squashfs-tools patchelf
+  procps-ng
 )
 
 if [[ "${ENABLE_GSTREAMER}" == "1" ]]; then
