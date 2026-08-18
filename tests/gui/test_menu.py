@@ -31,8 +31,12 @@ def test_main_menu_title(tmp_path: Path) -> None:
         err = (exc.stderr or b"").decode(errors="ignore")
         if "cannot be opened for writing" in err or "Permission denied" in err:
             pytest.skip("uinput device not writable - run as root or load uinput")
-        if "FIFO '/tmp/neutrino.input' not found" in err:
-            pytest.skip("Neutrino FIFO missing – start Neutrino (make run / run-now) before running GUI tests")
+        # Both shapes: no FIFO at all, and a FIFO left behind by an earlier run
+        # with nothing reading it. The path is configurable through
+        # NEUTRINO_INPUT_FIFO, so matching the default one literally missed the
+        # case as well.
+        if "FIFO" in err and ("not found" in err or "has no reader" in err):
+            pytest.skip("Neutrino FIFO unavailable – start Neutrino (make run / run-now) before running GUI tests")
         raise
     except SystemExit as exc:  # send_keys handles missing evdev
         pytest.skip(str(exc))
