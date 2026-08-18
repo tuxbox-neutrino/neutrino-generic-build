@@ -5,7 +5,7 @@ or (at your option) any later version** (`GPL-2.0-or-later`). The full text is i
 [`../LICENSE`](../LICENSE).
 
 That choice follows the software this build system exists to build: `COPYING` in
-both [gui-neutrino](https://github.com/tuxbox-neutrino/gui-neutrino) and
+both [neutrino](https://github.com/tuxbox-neutrino/neutrino) and
 [libstb-hal](https://github.com/tuxbox-neutrino/libstb-hal) is GPL version 2, and
 their source headers grant the "or any later version" option.
 

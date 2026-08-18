@@ -5,7 +5,7 @@ Builds and tests now run directly on the host; the former Docker auto-wrapper is
 
 ## What this is
 
-[Neutrino](https://github.com/tuxbox-neutrino/gui-neutrino) is the open-source TV
+[Neutrino](https://github.com/tuxbox-neutrino/neutrino) is the open-source TV
 user interface that runs on Tuxbox set-top boxes. **This repository builds it for
 your PC** — an ordinary x86_64 Linux desktop or laptop — so you can develop on it,
 test it, and look at it without owning a receiver.
@@ -54,7 +54,7 @@ Pick your language and follow the direct links:
 
 ### Deutsch
 
-**Worum es geht:** [Neutrino](https://github.com/tuxbox-neutrino/gui-neutrino) ist
+**Worum es geht:** [Neutrino](https://github.com/tuxbox-neutrino/neutrino) ist
 die freie TV-Oberfläche der Tuxbox-Receiver. Dieses Repository baut sie **für den
 PC** — ein gewöhnliches x86_64-Linux —, damit man sie ohne Receiver entwickeln,
 testen und ansehen kann. Ein DVB-Tuner ist optional: ohne einen startet Neutrino

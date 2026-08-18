@@ -28,7 +28,7 @@
 #  Fixed number of parallel jobs. By default the CPU count is detected automatically.
 
 #NEUTRINO_BRANCH := master
-#NEUTRINO_GIT_URL := https://github.com/tuxbox-neutrino/gui-neutrino.git
+#NEUTRINO_GIT_URL := https://github.com/tuxbox-neutrino/neutrino.git
 #  Source and branch for the Neutrino core. Adjust for forks or pinned tags.
 
 #NEUTRINO_CONFIGURE_FLAGS := --enable-debug

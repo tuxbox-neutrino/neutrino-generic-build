@@ -7,7 +7,10 @@
 # inputs live in make/env-derive.mk, which is included AFTER Makefile.local so
 # an override (NEUTRINO_INSTALL_DIR, N_PREFIX, ...) actually reaches them.
 
-NEUTRINO_GIT_URL ?= https://github.com/tuxbox-neutrino/gui-neutrino.git
+# Renamed from gui-neutrino. The old URL still redirects, but only until
+# something else claims that name under the organisation -- then the clone would
+# quietly pull a different repository. So the current name, not the redirect.
+NEUTRINO_GIT_URL ?= https://github.com/tuxbox-neutrino/neutrino.git
 NEUTRINO_BRANCH ?= master
 NEUTRINO_SRC_DIR ?= $(SOURCES_DIR)/neutrino
 NEUTRINO_BUILD_DIR ?= $(BUILD_DIR)/neutrino
