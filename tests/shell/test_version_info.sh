@@ -1107,27 +1107,39 @@ esac
 
 # `git diff` exits 128 when it cannot answer, and reading that as "modified"
 # invents a lesser version out of an error: ~dirty at exit 0 where the tree is
-# unknown. A textconv driver naming a program that is not there produces exactly
-# that, and it is the only step that fails -- reading the index and the commit
-# both still work, so this reaches the comparison rather than an earlier guard.
-# Driven twice, because the comparison happens in two places: directly for a
-# tree with no flags, and against the scratch index for a tree that has one.
+# unknown. Driven twice, because the comparison happens in two places: directly
+# for a tree with no flags, and against the scratch index for a tree that has
+# one. The stub fails only `diff`, so everything before it -- the index scan,
+# the scratch copy, clearing the flags -- still runs and this reaches the
+# comparison rather than an earlier guard.
+#
+# Through a stub rather than a real git provoked into failing. The provocation
+# used before, a textconv driver naming a program that is not there, yields 128
+# only on a narrow band of versions: 2.39.5 and 2.52.0 both report a plain
+# difference instead, and CI went red on debian-12 and fedora-41 while
+# debian-13 (2.47.3, the version this was written on) stayed green. What the
+# script owes its caller is a refusal when the comparison fails; how a real git
+# can be talked into failing is not part of that contract.
+diff128_real_git="$(command -v git 2>/dev/null || true)"
+rm -rf "$WORK/diff128bin"; mkdir -p "$WORK/diff128bin"
+{
+	printf '#!/bin/sh\n'
+	printf 'for a in "$@"; do [ "$a" = diff ] && exit 128; done\n'
+	printf 'exec %s "$@"\n' "$diff128_real_git"
+} > "$WORK/diff128bin/git"
+chmod +x "$WORK/diff128bin/git"
 for diff128 in plain flagged; do
 	diff128_dir="$WORK/diff128-$diff128"
 	rm -rf "$diff128_dir"; cp -a "$WORK/repo" "$diff128_dir"
 	rm -rf "$diff128_dir/nested"
-	printf 'file.txt diff=absent\n' > "$diff128_dir/.gitattributes"
-	( cd "$diff128_dir" && git_q config diff.absent.textconv /nonexistent-textconv-xyz ) >/dev/null 2>&1
 	[ "$diff128" = plain ] ||
 		( cd "$diff128_dir" && git_q update-index --assume-unchanged file.txt ) >/dev/null 2>&1
 	echo patched > "$diff128_dir/file.txt"
 	diff128_label="a comparison that cannot answer aborts ($diff128)"
 	# The message has to name the comparison. Aborting is not enough on its own:
 	# an earlier guard failing would abort too, and then this would be green
-	# without the comparison ever having been reached. (A plain `git diff` in the
-	# flagged tree still answers 0 -- the flag hides the change until the scratch
-	# index clears it -- so the run itself is the only probe that proves this.)
-	if run_vi "$diff128_dir" >/dev/null 2>&1; then
+	# without the comparison ever having been reached.
+	if PATH="$WORK/diff128bin:$PATH" run_vi "$diff128_dir" >/dev/null 2>&1; then
 		ko "$diff128_label" "the script succeeded: $(vi_field "$diff128_dir" package)"
 	elif grep -q 'git diff exited 128' "$WORK/stderr.last"; then
 		ok "$diff128_label"
