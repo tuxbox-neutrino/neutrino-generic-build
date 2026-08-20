@@ -116,7 +116,8 @@ release)
 			while [ $# -gt 0 ]; do
 				case "$1" in
 					--target) target="$2"; shift 2 ;;
-					--title|--notes) shift 2 ;;
+					--notes) printf '%s' "$2" > "$d.body"; shift 2 ;;
+					--title) shift 2 ;;
 					--draft) draft=1; shift ;;
 					*) shift ;;
 				esac
@@ -137,6 +138,7 @@ release)
 			while [ $# -gt 0 ]; do
 				case "$1" in
 					--target) printf '%s\n' "$2" > "$d/target"; shift 2 ;;
+					--notes) printf '%s' "$2" > "$d.body"; shift 2 ;;
 					--draft=false) publish=1; shift ;;
 					*) shift ;;
 				esac
@@ -412,6 +414,16 @@ grep -q '^release upload' "$SRV/log" && uploaded=1 || uploaded=0
 	&& ok "an unchanged rebuild is not re-uploaded" "no upload" \
 	|| no "an unchanged rebuild is not re-uploaded" "rc=0 and no upload" "rc=$rc upload=$uploaded [$out]"
 
+# The notes of a rolling release have to follow the build it holds. They are
+# handed to `gh release create`, which runs exactly once, so without a refresh
+# every later correction would stay invisible at the place people actually read.
+real_notes="$(cat "$SRV/rel/latest.body" 2>/dev/null)"
+printf 'stale text from the very first run' > "$SRV/rel/latest.body"
+out=$("$SCRIPT" latest 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$SRV/rel/latest.body")" = "$real_notes" ] \
+	&& ok "latest refreshes its notes on every run" "restored" \
+	|| no "latest refreshes its notes on every run" "the script's own notes" "rc=$rc [$(cut -c1-30 "$SRV/rel/latest.body")]"
+
 # A draft state that cannot be read is not "published". Rounded down, the run
 # would end green with the release still invisible -- an archive nobody can see,
 # reported as archived.
@@ -536,6 +548,17 @@ grep -q '^release upload' "$SRV/log" && again=1 || again=0
 [ "$rc" -eq 0 ] && [ "$msg" = 1 ] && [ "$again" = 0 ] \
 	&& ok "a finished archive is left alone" "no upload" \
 	|| no "a finished archive is left alone" "rc=0, said so, no upload" "rc=$rc upload=$again [$out]"
+
+# And the opposite for an archive: it describes one frozen build, so its notes
+# must not drift to whatever the script says today. Not hypothetical -- the
+# first archives were published before the package could detect a missing tuner,
+# and their notes have to keep saying so.
+arch_body="$SRV/rel/$(printf '%s' "$ARCHIVE_TAG" | tr / _).body"
+printf 'the text this build was published with' > "$arch_body"
+out=$("$SCRIPT" archive 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$arch_body")" = "the text this build was published with" ] \
+	&& ok "an archive keeps the notes it was created with" "unchanged" \
+	|| no "an archive keeps the notes it was created with" "unchanged text" "rc=$rc [$(cut -c1-30 "$arch_body")]"
 
 # A half-finished archive -- the package uploaded, the checksum did not -- must
 # be repaired, not declared finished. Counting assets instead of naming them is

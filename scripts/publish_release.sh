@@ -271,6 +271,19 @@ cmd_latest() {
 		gh release edit latest --target "$GITHUB_SHA" --draft=false >/dev/null
 	fi
 
+	# Refreshed on every run, not only when the release is created. `latest`
+	# describes whichever build is in it right now, so a text improved here has
+	# to reach the release that already exists -- otherwise the wording stays
+	# frozen at whatever the very first run happened to say, and every later
+	# correction is invisible where people actually read it.
+	#
+	# An archive is the opposite and is left alone below: it describes one
+	# frozen build, and a note that stops matching that build would be the
+	# defect. This is not hypothetical -- the first two archives were published
+	# before the package could detect a missing tuner, and their notes have to
+	# keep saying so.
+	gh release edit latest --notes "$LATEST_NOTES" >/dev/null
+
 	move_tag latest
 
 	# --clobber only overwrites an asset of the *same* name, and the AppImage
