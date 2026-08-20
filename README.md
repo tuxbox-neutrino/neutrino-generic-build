@@ -13,6 +13,33 @@ test it, and look at it without owning a receiver.
 What you get is the same Neutrino, in a window on your desktop, with its web
 interface reachable at <http://localhost:31344>.
 
+## Just run it
+
+Building takes a while the first time. If you only want to look at Neutrino,
+take the ready-made AppImage instead — no toolchain, no dependencies, one file.
+Get it from the
+[latest release](https://github.com/tuxbox-neutrino/neutrino-generic-build/releases/latest):
+
+```bash
+chmod +x Neutrino_*.AppImage
+sha256sum -c SHA256SUMS          # optional, checks the download
+SIMULATE_FE=1 ./Neutrino_*.AppImage
+```
+
+`SIMULATE_FE=1` is what lets it start without a DVB tuner; drop it if you have
+one. It needs **glibc 2.38 or newer** — Debian 13 (2.41) and Ubuntu 24.04 (2.39)
+work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not — plus `libgl1`,
+`libglx0`, `libglvnd0` and a private mount namespace (unprivileged user
+namespaces are enough, `bwrap` also works, as root neither is needed). Settings
+live in `~/.local/share/neutrino-appimage`; nothing is written outside your home
+directory.
+
+`latest` is replaced by every publishing run. The `build/…` releases stay put.
+Both are PC builds — images for a real receiver come from
+[tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
+
+Everything below is about building it yourself.
+
 ## What you need
 
 |  | |
