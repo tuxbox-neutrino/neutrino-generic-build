@@ -218,6 +218,35 @@ if [ ! -d "${NEUTRINO_DATA_ROOT}" ]; then
   exit 1
 fi
 
+# Neutrino builds its dummy frontend only when *both* hold: it found no tuner
+# and SIMULATE_FE says so -- src/zapit/femanager.cpp, `femap.empty() &&
+# simulate_fe_enabled()`. Without the variable a machine with no receiver simply
+# ends up with no frontend, and nothing says why.
+#
+# The run targets in the build tree set it unconditionally
+# (scripts/neutrino-wrapper.sh). This package must not: it is handed to
+# strangers, and the same variable also switches off radiotext and other
+# tuner-bound functions in src/gui/osd_setup.cpp and src/gui/channellist.cpp.
+# Somebody who owns a receiver would lose those without ever learning the name
+# of the switch. So it is set only where there is demonstrably no frontend, and
+# never over a value the user chose -- SIMULATE_FE=0 stays off.
+#
+# The glob is a variable so a test can point it somewhere it controls; the
+# default is the path zapit itself opens (src/zapit/frontend.cpp).
+NEUTRINO_FRONTEND_GLOB="${NEUTRINO_FRONTEND_GLOB:-/dev/dvb/adapter*/frontend*}"
+if [ -z "${SIMULATE_FE:-}" ]; then
+  neutrino_have_tuner=0
+  for neutrino_fe in ${NEUTRINO_FRONTEND_GLOB}; do
+    if [ -e "${neutrino_fe}" ]; then
+      neutrino_have_tuner=1
+      break
+    fi
+  done
+  if [ "${neutrino_have_tuner}" = 0 ]; then
+    export SIMULATE_FE=1
+  fi
+fi
+
 # If the mount point has to be created, a tmpfs goes over its parent -- and a
 # tmpfs hides whatever was there. With a prefix below the user's home directory
 # that would be the state directory seeded just below, or even this AppDir, and

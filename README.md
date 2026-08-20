@@ -23,11 +23,11 @@ Get it from the
 ```bash
 chmod +x Neutrino_*.AppImage
 sha256sum -c SHA256SUMS          # optional, checks the download
-SIMULATE_FE=1 ./Neutrino_*.AppImage
+./Neutrino_*.AppImage
 ```
 
-`SIMULATE_FE=1` is what lets it start without a DVB tuner; drop it if you have
-one. It needs **glibc 2.38 or newer** — Debian 13 (2.41) and Ubuntu 24.04 (2.39)
+Without a DVB tuner it starts in simulation mode by itself and everything but
+live TV works; with one it uses it. It needs **glibc 2.38 or newer** — Debian 13 (2.41) and Ubuntu 24.04 (2.39)
 work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not — plus `libgl1`,
 `libglx0`, `libglvnd0` and a private mount namespace (unprivileged user
 namespaces are enough, `bwrap` also works, as root neither is needed). Settings

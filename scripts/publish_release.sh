@@ -56,10 +56,10 @@ LATEST_NOTES="**Neutrino for a PC, in a single file.** Not an image for a receiv
 \`\`\`
 chmod +x Neutrino_*.AppImage
 sha256sum -c SHA256SUMS          # optional, checks the download
-SIMULATE_FE=1 ./Neutrino_*.AppImage
+./Neutrino_*.AppImage
 \`\`\`
 
-Neutrino opens in a window, with its web interface at <http://localhost:31344>. \`SIMULATE_FE=1\` is what makes it start without a DVB tuner; drop it if you have one.
+Neutrino opens in a window, with its web interface at <http://localhost:31344>. With no DVB tuner it starts in simulation mode by itself, and everything but live TV works; with one it uses it. Set \`SIMULATE_FE\` yourself to overrule that.
 
 **What it needs.** x86_64, and glibc 2.38 or newer -- Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
 
@@ -72,10 +72,10 @@ ARCHIVE_NOTES="**Neutrino for a PC, in a single file** -- this one kept on purpo
 \`\`\`
 chmod +x Neutrino_*.AppImage
 sha256sum -c SHA256SUMS          # optional, checks the download
-SIMULATE_FE=1 ./Neutrino_*.AppImage
+./Neutrino_*.AppImage
 \`\`\`
 
-Neutrino opens in a window, with its web interface at <http://localhost:31344>. \`SIMULATE_FE=1\` is what makes it start without a DVB tuner; drop it if you have one.
+Neutrino opens in a window, with its web interface at <http://localhost:31344>. With no DVB tuner it starts in simulation mode by itself, and everything but live TV works; with one it uses it. Set \`SIMULATE_FE\` yourself to overrule that.
 
 **What it needs.** x86_64, and glibc 2.38 or newer -- Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
 

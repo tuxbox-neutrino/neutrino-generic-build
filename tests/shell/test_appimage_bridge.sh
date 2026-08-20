@@ -224,6 +224,44 @@ if [ "$have_cc" -eq 1 ] && [ -d "$WORK/sysroot" ]; then
 		ko "the generated AppRun is executable and valid POSIX sh" "sh -n failed"
 	fi
 
+	# Neutrino only builds its dummy frontend when it found no tuner *and*
+	# SIMULATE_FE says so (src/zapit/femanager.cpp). Without a receiver and
+	# without the variable, a downloaded package just ends up with no frontend.
+	# Setting it unconditionally is not an option either: the same variable
+	# switches off radiotext and other tuner-bound functions in
+	# src/gui/osd_setup.cpp and src/gui/channellist.cpp, and this package goes
+	# to people who may well own a receiver.
+	#
+	# The decision block is lifted out of the *generated* AppRun and driven
+	# directly, so this measures the shipped text rather than a copy of it.
+	awk '/^NEUTRINO_FRONTEND_GLOB=/,/^fi$/' "$APPDIR/AppRun" > "$WORK/fe_decision.sh"
+	mkdir -p "$WORK/fe/adapter0"
+	decide() { # $1 = glob, $2 = preset value ("" leaves it unset)
+		if [ -n "$2" ]; then
+			SIMULATE_FE="$2" NEUTRINO_FRONTEND_GLOB="$1" sh -c \
+				'. "$0"; printf "%s" "${SIMULATE_FE:-unset}"' "$WORK/fe_decision.sh"
+		else
+			NEUTRINO_FRONTEND_GLOB="$1" sh -c \
+				'. "$0"; printf "%s" "${SIMULATE_FE:-unset}"' "$WORK/fe_decision.sh"
+		fi
+	}
+
+	got=$(decide "$WORK/fe/adapter*/frontend*" "")
+	[ "$got" = 1 ] && ok "with no tuner AppRun turns simulation on" \
+		|| ko "with no tuner AppRun turns simulation on" "SIMULATE_FE=$got"
+
+	touch "$WORK/fe/adapter0/frontend0"
+	got=$(decide "$WORK/fe/adapter*/frontend*" "")
+	[ "$got" = unset ] && ok "with a tuner AppRun leaves simulation alone" \
+		|| ko "with a tuner AppRun leaves simulation alone" "SIMULATE_FE=$got"
+
+	# A value the user chose wins either way -- 0 is how somebody with a
+	# receiver switches the simulation off again, and it must survive.
+	got=$(decide "$WORK/fe/nothing-here/*" 0)
+	[ "$got" = 0 ] && ok "a chosen SIMULATE_FE=0 is not overwritten" \
+		|| ko "a chosen SIMULATE_FE=0 is not overwritten" "SIMULATE_FE=$got"
+	rm -f "$WORK/fe/adapter0/frontend0"
+
 	# The linker records the staging directory; shipping that would name the
 	# machine the package was built on and point at libraries no other machine
 	# has.
