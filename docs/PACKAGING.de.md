@@ -260,8 +260,11 @@ als die Commits im Tag beschreiben. Ihre bloße Anwesenheit genügt deshalb für
 Nicht benannt wird die **Maschine**. CI baut auf `ubuntu-latest` und
 installiert Hostpakete ungepinnt; GitHub erneuert dieses Image wöchentlich, und
 die ABI-Untergrenze weiter oben hängt genau daran. Dieselben drei Commits
-können Monate später also andere Bytes ergeben, und ein siebenstelliges
-Commit-Präfix kann im Prinzip kollidieren. Beides ist bewusst nicht im Tag
+könnten Monate später also andere Bytes ergeben — tatsächlich ist es
+schlimmer: der Bau ist gar nicht bitreproduzierbar. Gemessen am 2026-08-20
+ergaben zwei Dispatches desselben Commits, Minuten auseinander auf demselben
+Runner-Image, AppImages mit verschiedenen Prüfsummen. Ein siebenstelliges
+Commit-Präfix kann zusätzlich im Prinzip kollidieren. Beides ist bewusst nicht im Tag
 gelöst — einen Tag, der ein Runner-Image benennt, liest niemand mehr.
 Stattdessen schließt der Archivschritt die Lücke am anderen Ende:
 `scripts/publish_release.sh` vergleicht die unter dem Tag bereits
@@ -302,7 +305,12 @@ Vier Dinge, die man wissen sollte, weil sie sich nicht wegprogrammieren lassen:
   Commits derselben Abhängigkeit dieses Präfix, kollidiert der Tag. Das
   Ergebnis ist dann eine **Verweigerung** des zweiten Archivs, kein falsches:
   der Prüfsummenvergleich schlägt an, bevor etwas hochgeladen wird.
-- Ein erneuter Dispatch eines unveränderten Baus lädt gar nichts hoch.
+- Ein erneuter Dispatch, der bitgleiche Bytes liefert, lädt gar nichts hoch.
+  Das ist eine Sicherung, kein Regelfall: gemessen unterscheiden sich zwei
+  Bauten desselben Commits immer. Praktische Folge — ein zweites
+  `archive=true` auf einen bereits archivierten Commit wird **abgelehnt**, weil
+  das Paket ein anderes ist als das dort liegende. Das ist so gewollt: zwei
+  verschiedene Pakete unter einem Etikett waeren schlimmer.
 
 ## Vorbereitung
 

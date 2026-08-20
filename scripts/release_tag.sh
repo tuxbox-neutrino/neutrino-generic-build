@@ -28,10 +28,12 @@
 #
 # What the tag deliberately does not name is the machine. CI builds on
 # ubuntu-latest and installs host packages unpinned, and GitHub rebuilds that
-# image weekly -- docs/PACKAGING says as much about the glibc floor -- so the
-# same three commits can yield different bytes months apart. And every commit
-# here is abbreviated to seven characters, which is short enough to collide in
-# principle -- for the build commit and for either dependency, and the more so
+# image weekly -- docs/PACKAGING says as much about the glibc floor. The build is
+# not byte-reproducible either way: measured 2026-08-20, two dispatches of the
+# very same commit, minutes apart on the same runner image, produced AppImages
+# with different checksums. So a rebuild always differs, not merely eventually.
+# And every commit here is abbreviated to seven characters, which is short
+# enough to collide in principle -- for the build commit and for either dependency, and the more so
 # because CI clones shallowly, so git abbreviates against very few objects.
 # Neither is fixed here: a tag long enough to name a runner image is a tag
 # nobody reads.

@@ -252,8 +252,11 @@ presence alone is therefore enough for `-dirty`.
 What the tag does not name is the **machine**. CI builds on `ubuntu-latest` and
 installs host packages unpinned; GitHub rebuilds that image weekly, and the ABI
 floor described above depends on exactly this. The same three commits can
-therefore yield different bytes months apart, and a seven-character commit
-prefix can collide in principle. Neither is solved in the tag, deliberately — a
+could therefore yield different bytes months apart — and it is worse than
+that: the build is not byte-reproducible at all. Measured on 2026-08-20, two
+dispatches of the same commit, minutes apart on the same runner image, produced
+AppImages with different checksums. A seven-character commit prefix can collide
+on top of that. Neither is solved in the tag, deliberately — a
 tag long enough to name a runner image is a tag nobody reads. The archive step
 closes the gap at the other end instead: `scripts/publish_release.sh` compares
 the `SHA256SUMS` already published under the tag with the one just built and
@@ -290,7 +293,12 @@ Four things worth knowing, because none of them can be engineered away:
   dependency sharing that prefix collide. What follows is a **refusal** of the
   second archive, not a wrong one: the checksum comparison catches it before
   anything is uploaded.
-- Re-dispatching an unchanged build uploads nothing at all.
+- A re-dispatch that produces byte-identical output uploads nothing at all.
+  That is a safety net, not the common case: measured, two builds of one commit
+  always differ. The practical consequence is that a second `archive=true` on
+  an already archived commit is **refused**, because the package is not the one
+  already there. Deliberately so — two different packages under one label would
+  be worse.
 
 ## Preparation Checklist
 
