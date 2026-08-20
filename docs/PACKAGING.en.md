@@ -266,6 +266,20 @@ uploaded first now surfaces.
 The rolling `latest` release needs none of this — it is replaced on every
 publishing run. Only the archive has to stay distinguishable.
 
+Such a tag is a **key** and reads like one, so it is not what heads the release
+page: `archive_title` in `scripts/publish_release.sh` forms a title from it.
+
+```
+Tag:    build/2026.8.42.git20260816192537.g85503bef6f-b8cfc49-hal455fba3-dvbsi8ed28af
+Title:  Neutrino 2026.8.42 (2026-08-16, 85503bef6f)
+```
+
+Version, commit date (UTC) and the Neutrino commit — the same one the AppImage
+filename carries, so a download can be matched to its archive. The tag itself is
+unchanged and still stands in the URL, where a machine key belongs. Where the
+slug cannot be read the title falls back to the tag: no release fails over its
+label.
+
 ### When publishing happens
 
 Only a `workflow_dispatch` on `master`. Pushes, pull requests and tag pushes do

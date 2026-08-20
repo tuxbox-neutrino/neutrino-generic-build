@@ -346,6 +346,93 @@ cmd_latest() {
 	done
 }
 
+# archive_title <tag> <build commit> -- what a person reads on the release page.
+#
+# The tag is a key. It has to stay unique across four inputs that move
+# independently, and cmd_archive verifies its build-commit part before this job
+# writes anything, so it cannot be shortened without giving one of those up. It
+# was also being handed straight to --title, and the release page therefore led
+# with seventy-seven characters of provenance. GitHub keeps tag and title apart;
+# only the title has to read like something, and the rolling release already
+# shows the shape ("Latest build").
+#
+# Everything needed sits inside the tag, which is the point: this job holds the
+# artefacts and a checkout of *this* repository, never Neutrino's, so
+# version_info.sh cannot be asked what it built. The slug it produced is one of
+#
+#   <version>.git<YYYYMMDDHHMMSS>.g<hash>   built from a checkout
+#   <version>                               built from a tarball
+#
+# and anything that is neither falls back to printing the tag, unchanged. A
+# title is decoration: no release may fail because one could not be formed.
+archive_title() {
+	title_tag="$1"
+	title_body="${title_tag#build/}"
+	# The same anchor cmd_archive validated, for the same reason it picked it:
+	# the build commit is the one part of the name this job knows on its own.
+	title_slug="${title_body%%-${2}-hal*}"
+	if [ "$title_slug" = "$title_body" ]; then
+		printf '%s\n' "$title_tag"
+		return 0
+	fi
+
+	# -dirty arrives from either end: version_info.sh marks a modified Neutrino
+	# inside the slug, release_tag.sh appends its own for a modified build tree
+	# or dependency. The reader only needs to know that something was patched.
+	title_mark=""
+	case "$title_tag" in
+		*-dirty*) title_mark="modified" ;;
+	esac
+	title_slug="${title_slug%-dirty}"
+
+	case "$title_slug" in
+		*.git*.g*) ;;
+		*)
+			# No commit to name. Still worth more than the tag.
+			if [ -n "$title_mark" ]; then
+				printf 'Neutrino %s (%s)\n' "$title_slug" "$title_mark"
+			else
+				printf 'Neutrino %s\n' "$title_slug"
+			fi
+			return 0
+			;;
+	esac
+
+	title_base="${title_slug%%.git*}"
+	title_tail="${title_slug#*.git}"
+	title_date="${title_tail%%.g*}"
+	title_hash="${title_tail#*.g}"
+
+	# version_info.sh guards the date to fourteen digits and takes the hash from
+	# rev-parse, but what arrives here is a string the *build* job formed, and
+	# this job trusts that job with nothing else either.
+	case "$title_date" in
+		[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) ;;
+		*) printf '%s\n' "$title_tag"; return 0 ;;
+	esac
+	case "$title_hash" in
+		'' | *[!0-9a-f]*) printf '%s\n' "$title_tag"; return 0 ;;
+	esac
+
+	# UTC, because version_info.sh reads the commit date that way. Written out
+	# as ISO rather than a month name: the notes are English and the readers are
+	# not, and 08-09 must not be readable as two different days.
+	title_y="${title_date%??????????}"
+	title_m="${title_date#????}"; title_m="${title_m%????????}"
+	title_d="${title_date#??????}"; title_d="${title_d%??????}"
+
+	# The hash keeps version_info.sh's ten characters rather than the seven used
+	# for the build commit: this is the one the AppImage filename carries, and a
+	# reader matching a download to its archive should find the same string.
+	if [ -n "$title_mark" ]; then
+		printf 'Neutrino %s (%s-%s-%s, %s, %s)\n' \
+			"$title_base" "$title_y" "$title_m" "$title_d" "$title_hash" "$title_mark"
+	else
+		printf 'Neutrino %s (%s-%s-%s, %s)\n' \
+			"$title_base" "$title_y" "$title_m" "$title_d" "$title_hash"
+	fi
+}
+
 cmd_archive() {
 	[ -n "${GITHUB_SHA:-}" ] || die "GITHUB_SHA is not set"
 	tag="${ARCHIVE_TAG:-}"
@@ -422,7 +509,8 @@ cmd_archive() {
 		# build somebody can rely on, and a failed upload must not leave a
 		# permanent-looking release with nothing in it.
 		gh release create "$tag" --draft \
-			--target "$GITHUB_SHA" --title "$tag" --notes "$ARCHIVE_NOTES"
+			--target "$GITHUB_SHA" --title "$(archive_title "$tag" "$run_commit")" \
+			--notes "$ARCHIVE_NOTES"
 	fi
 	upload_build "$tag"
 	if release_is_draft "$tag"; then

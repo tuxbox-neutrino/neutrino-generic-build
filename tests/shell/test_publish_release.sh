@@ -117,7 +117,7 @@ release)
 				case "$1" in
 					--target) target="$2"; shift 2 ;;
 					--notes) printf '%s' "$2" > "$d.body"; shift 2 ;;
-					--title) shift 2 ;;
+					--title) printf '%s' "$2" > "$d.title"; shift 2 ;;
 					--draft) draft=1; shift ;;
 					*) shift ;;
 				esac
@@ -530,7 +530,7 @@ make_assets "$APP_A"
 # The tag has to name the commit of the run that publishes it -- the publish job
 # checks that, because the name is formed in the job that runs project code.
 archive_tag_for() {
-	printf 'build/2026.8.42-%.7s-hal455fba3-dvbsi8ed28af\n' "$1"
+	printf 'build/2026.8.42.git20260816192537.g85503bef6f-%.7s-hal455fba3-dvbsi8ed28af\n' "$1"
 }
 ARCHIVE_TAG="$(archive_tag_for "$GITHUB_SHA")"
 export ARCHIVE_TAG
@@ -539,6 +539,40 @@ want="$APP_A SHA256SUMS "
 [ "$rc" -eq 0 ] && [ "$(assets "$ARCHIVE_TAG")" = "$want" ] \
 	&& ok "an archive is created with both files" "$(assets "$ARCHIVE_TAG")" \
 	|| no "an archive is created with both files" "$want" "rc=$rc [$(assets "$ARCHIVE_TAG")] $out"
+
+# The tag is a key and reads like one: it names four inputs that move on their
+# own, and the publish job verifies part of it before writing. The title is the
+# only half a person sees, so it must not be a copy of the key. Pinned as an
+# exact string -- "shorter than the tag" would pass on a title that dropped the
+# commit, and matching a download to its archive is the one thing it is for.
+arch_title="$SRV/rel/$(printf '%s' "$ARCHIVE_TAG" | tr / _).title"
+want="Neutrino 2026.8.42 (2026-08-16, 85503bef6f)"
+[ "$(cat "$arch_title" 2>/dev/null)" = "$want" ] \
+	&& ok "an archive is titled for a reader" "$want" \
+	|| no "an archive is titled for a reader" "$want" "[$(cat "$arch_title" 2>/dev/null)]"
+
+# A title is decoration. A slug it cannot read must cost the title, never the
+# release -- so the tag comes back and both files still go up.
+srv_reset
+GITHUB_SHA="4a00000000000000000000000000000000000000"
+make_assets "$APP_A"
+ARCHIVE_TAG="build/2026.8.42.git2026081.g85503bef6f-$(printf '%.7s' "$GITHUB_SHA")-halsys-dvbsisys"
+export ARCHIVE_TAG
+out=$("$SCRIPT" archive 2>&1); rc=$?
+arch_title="$SRV/rel/$(printf '%s' "$ARCHIVE_TAG" | tr / _).title"
+want="$APP_A SHA256SUMS "
+[ "$rc" -eq 0 ] && [ "$(assets "$ARCHIVE_TAG")" = "$want" ] \
+	&& [ "$(cat "$arch_title" 2>/dev/null)" = "$ARCHIVE_TAG" ] \
+	&& ok "an unreadable slug costs the title, not the release" "rc=0, tag as title" \
+	|| no "an unreadable slug costs the title, not the release" "rc=0, both files, tag as title" \
+		"rc=$rc [$(assets "$ARCHIVE_TAG")] title=[$(cat "$arch_title" 2>/dev/null)]"
+
+srv_reset
+GITHUB_SHA="4444444444444444444444444444444444444444"
+make_assets "$APP_A"
+ARCHIVE_TAG="$(archive_tag_for "$GITHUB_SHA")"
+export ARCHIVE_TAG
+"$SCRIPT" archive >/dev/null 2>&1
 
 # Running it again must not upload anything: the archive is finished.
 : > "$SRV/log"

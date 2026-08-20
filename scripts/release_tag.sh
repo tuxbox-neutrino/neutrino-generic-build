@@ -53,6 +53,11 @@
 # The rolling `latest` release needs none of this -- it is overwritten on every
 # run; only the archive has to stay distinguishable.
 #
+# None of this reaches the release page as a heading. What makes a good key
+# makes a poor label, so publish_release.sh's archive_title reduces the name
+# back to what a person asked in the first place -- which Neutrino, from when --
+# and leaves the key in the URL.
+#
 # Usage: release_tag.sh [<build-commit>]
 #   <build-commit>  the build system's commit. CI passes github.sha; when it is
 #                   omitted the value comes from HEAD, and a modified worktree

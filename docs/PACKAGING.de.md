@@ -275,6 +275,21 @@ Das rollende `latest`-Release braucht nichts davon: es wird bei jedem
 veröffentlichenden Lauf überschrieben. Nur das Archiv muss unterscheidbar
 bleiben.
 
+Ein solcher Tag ist ein **Schlüssel** und liest sich auch so. Auf der
+Release-Seite steht er deshalb nicht als Überschrift: `archive_title` in
+`scripts/publish_release.sh` formt daraus einen Titel.
+
+```
+Tag:    build/2026.8.42.git20260816192537.g85503bef6f-b8cfc49-hal455fba3-dvbsi8ed28af
+Titel:  Neutrino 2026.8.42 (2026-08-16, 85503bef6f)
+```
+
+Version, Commit-Datum (UTC) und der Neutrino-Commit — derselbe, den auch der
+AppImage-Dateiname trägt, damit sich ein Download seinem Archiv zuordnen lässt.
+Der Tag selbst bleibt unverändert und steht weiter in der URL, wo ein
+Maschinenschlüssel hingehört. Lässt sich der Slug nicht lesen, ist der Titel
+wieder der Tag: an seiner Beschriftung scheitert kein Release.
+
 ### Wann veröffentlicht wird
 
 Nur ein `workflow_dispatch` auf `master`. Pushes, Pull Requests und Tag-Pushes
