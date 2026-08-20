@@ -288,7 +288,18 @@ want="build/2026.8.42-abcdef1-hal${HAL}-dvbsi${DVBSI}"
 			want="build/${SLUG}-${head}-hal${HAL}-dvbsi${DVBSI}-dirty"
 			[ "$got" = "$want" ] && ok "$label" "$got" || no "$label" "$want" "$got"
 		else
-			no "$label" "a fixture that hides the change" "git diff saw it anyway"
+			# A skip, not a failure: the trap could not be built here. Whether
+			# the fsmonitor-valid bit gets stored is git's decision, and it does
+			# not always make it. Measured 2026-08-20: reliable on git 2.47.3
+			# over ext4, but on debian-12 -- in CI and reproduced in a local
+			# `debian:12` container -- the *first* of these two fixtures does not
+			# hide the change while the second does, repeatably. The two flag
+			# cases above are deterministic and stay a failure; this one is not,
+			# and a test that cannot build its trap has to say so instead of
+			# calling the product broken. The defence still gets asserted on
+			# every host where the fixture works, and by the second variant even
+			# on those where it does not.
+			sk "$label" "this git did not store the fsmonitor-valid bit"
 		fi
 	done
 
