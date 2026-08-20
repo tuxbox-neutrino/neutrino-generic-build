@@ -51,7 +51,9 @@ set -eu
 
 ASSET_DIR="${ASSET_DIR:-artifacts/appimage}"
 
-LATEST_NOTES="**Neutrino for a PC, in a single file.** Not an image for a receiver -- those come from [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
+LATEST_NOTES="## English
+
+**Neutrino for a PC, in a single file.** Not an image for a receiver — those come from [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
 
 \`\`\`
 chmod +x Neutrino_*.AppImage
@@ -61,13 +63,33 @@ sha256sum -c SHA256SUMS          # optional, checks the download
 
 Neutrino opens in a window, with its web interface at <http://localhost:31344>. With no DVB tuner it starts in simulation mode by itself, and everything but live TV works; with one it uses it. Set \`SIMULATE_FE\` yourself to overrule that.
 
-**What it needs.** x86_64, and glibc 2.38 or newer -- Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
+**What it needs.** x86_64, and glibc 2.38 or newer — Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
 
 Settings live in \`~/.local/share/neutrino-appimage\` (\`NEUTRINO_APPIMAGE_STATE\` moves them). Nothing is written outside your home directory.
 
-**This release is rolling.** Every publishing run replaces it, so nothing here is guaranteed to stay. The filename names the Neutrino commit inside. Take an archived \`build/…\` release when you need a state that stays put."
+**This release is rolling.** Every publishing run replaces it, so nothing here is guaranteed to stay. The filename names the Neutrino commit inside. Take an archived \`build/…\` release when you need a state that stays put.
 
-ARCHIVE_NOTES="**Neutrino for a PC, in a single file** -- this one kept on purpose, and it stays as it is. Not an image for a receiver; those come from [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
+## Deutsch
+
+**Neutrino für den PC, in einer Datei.** Kein Image für einen Receiver — die kommen von [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
+
+\`\`\`
+chmod +x Neutrino_*.AppImage
+sha256sum -c SHA256SUMS          # optional, checks the download
+./Neutrino_*.AppImage
+\`\`\`
+
+Neutrino öffnet sich in einem Fenster, die Weboberfläche liegt unter <http://localhost:31344>. Ohne DVB-Tuner startet es von selbst im Simulationsmodus, und alles außer Live-TV funktioniert; mit Tuner benutzt es ihn. Wer das übersteuern will, setzt \`SIMULATE_FE\` selbst.
+
+**Was es braucht.** x86_64 und glibc 2.38 oder neuer — Debian 13 (2.41) und Ubuntu 24.04 (2.39) laufen, Debian 12 (2.36) und Ubuntu 22.04 (2.35) nicht. Dazu \`libgl1\`, \`libglx0\` und \`libglvnd0\` sowie ein privater Mount-Namespace: unprivilegierte User-Namespaces genügen, \`bwrap\` geht auch, als root braucht es keines von beidem.
+
+Einstellungen liegen unter \`~/.local/share/neutrino-appimage\` (\`NEUTRINO_APPIMAGE_STATE\` verschiebt sie). Außerhalb des Benutzerverzeichnisses wird nichts geschrieben.
+
+**Dieses Release rollt.** Jeder veröffentlichende Lauf ersetzt es, nichts darin bleibt garantiert stehen. Der Dateiname nennt den Neutrino-Commit, der drinsteckt. Wer einen Stand braucht, der liegen bleibt, nimmt ein archiviertes \`build/…\`-Release."
+
+ARCHIVE_NOTES="## English
+
+**Neutrino for a PC, in a single file** — this one kept on purpose, and it stays as it is. Not an image for a receiver; those come from [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
 
 \`\`\`
 chmod +x Neutrino_*.AppImage
@@ -77,11 +99,29 @@ sha256sum -c SHA256SUMS          # optional, checks the download
 
 Neutrino opens in a window, with its web interface at <http://localhost:31344>. With no DVB tuner it starts in simulation mode by itself, and everything but live TV works; with one it uses it. Set \`SIMULATE_FE\` yourself to overrule that.
 
-**What it needs.** x86_64, and glibc 2.38 or newer -- Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
+**What it needs.** x86_64, and glibc 2.38 or newer — Debian 13 (2.41) and Ubuntu 24.04 (2.39) work, Debian 12 (2.36) and Ubuntu 22.04 (2.35) do not. Also \`libgl1\`, \`libglx0\` and \`libglvnd0\`, and a private mount namespace: unprivileged user namespaces are enough, \`bwrap\` works too, and as root neither is needed.
 
 Settings live in \`~/.local/share/neutrino-appimage\` (\`NEUTRINO_APPIMAGE_STATE\` moves them). Nothing is written outside your home directory.
 
-The tag names what this was built from: the Neutrino version inside, this repository's commit, and the two dependencies that are not pinned to a version -- libstb-hal and libdvbsi++. docs/PACKAGING explains why all four are needed to tell two builds apart."
+The tag names what this was built from: the Neutrino version inside, this repository's commit, and the two dependencies that are not pinned to a version — libstb-hal and libdvbsi++. docs/PACKAGING explains why all four are needed to tell two builds apart.
+
+## Deutsch
+
+**Neutrino für den PC, in einer Datei** — dieses hier absichtlich aufgehoben, und es bleibt, wie es ist. Kein Image für einen Receiver; die kommen von [tuxbox-os-builder](https://github.com/tuxbox-neutrino/tuxbox-os-builder).
+
+\`\`\`
+chmod +x Neutrino_*.AppImage
+sha256sum -c SHA256SUMS          # optional, checks the download
+./Neutrino_*.AppImage
+\`\`\`
+
+Neutrino öffnet sich in einem Fenster, die Weboberfläche liegt unter <http://localhost:31344>. Ohne DVB-Tuner startet es von selbst im Simulationsmodus, und alles außer Live-TV funktioniert; mit Tuner benutzt es ihn. Wer das übersteuern will, setzt \`SIMULATE_FE\` selbst.
+
+**Was es braucht.** x86_64 und glibc 2.38 oder neuer — Debian 13 (2.41) und Ubuntu 24.04 (2.39) laufen, Debian 12 (2.36) und Ubuntu 22.04 (2.35) nicht. Dazu \`libgl1\`, \`libglx0\` und \`libglvnd0\` sowie ein privater Mount-Namespace: unprivilegierte User-Namespaces genügen, \`bwrap\` geht auch, als root braucht es keines von beidem.
+
+Einstellungen liegen unter \`~/.local/share/neutrino-appimage\` (\`NEUTRINO_APPIMAGE_STATE\` verschiebt sie). Außerhalb des Benutzerverzeichnisses wird nichts geschrieben.
+
+Der Tag nennt, woraus dieser Bau entstand: die enthaltene Neutrino-Version, den Commit dieses Repos und die beiden Abhängigkeiten, die nicht auf eine Version festgenagelt sind — libstb-hal und libdvbsi++. docs/PACKAGING erklärt, warum alle vier nötig sind, um zwei Bauten auseinanderzuhalten."
 
 die() {
 	echo "publish_release: $*" >&2
