@@ -38,9 +38,19 @@ tests-gui:
 		exit 1; \
 	fi
 	@echo "[test-gui] Running pytest-based GUI suite"
+	@# -rs: under -q a skip is one letter in the progress line and a
+	@# number in the summary; which test stepped aside, and what it
+	@# wanted, is printed nowhere. Every skip in this suite is a named
+	@# precondition -- no Xvfb, another neutrino.real already running, a
+	@# DVB frontend present, a binary predating the change under test --
+	@# and without the names a run that skipped a third of itself reads
+	@# exactly like one that proved everything (WORK-215).
+	@# Not -ra: failures are printed in full anyway, and --maxfail=1
+	@# stays, so the first real failure stops the suite before a summary
+	@# of it would help.
 	@ARTIFACT_DIR=$(TEST_ARTIFACT_DIR)/gui \
 		ALLOW_NON_ROOT=$(ALLOW_NON_ROOT) \
-		$(PYTHON) -m pytest "$(GUI_TEST_DIR)" --maxfail=1 --disable-warnings -q
+		$(PYTHON) -m pytest "$(GUI_TEST_DIR)" --maxfail=1 --disable-warnings -q -rs
 
 .PHONY: tests-web
 tests-web:
