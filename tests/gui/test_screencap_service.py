@@ -13,6 +13,14 @@ half, the one that got harder when the capture moved off the GUI thread:
     lost one is reported as having lost it rather than as a clean ok,
   * a SIGTERM in the middle of a series ends, worker and all.
 
+Five of the seven need CScreencapService in the binary, and it lives on
+neutrino's master.screencap; against a master build they skip instead of
+reporting a service that was never linked in (WORK-281). The two that do
+not are test_check_series_rejects_the_collision, which starts nothing,
+and test_shutdown_during_a_series_ends, which asks only whether a SIGTERM
+mid-series ends without a crash -- a question the legacy CScreenShot
+path, with its own detached encoder thread, answers just as well.
+
 The first of those is a regression test for a Critical defect and is the
 reason this file exists (see test_every_capture_gets_its_own_file).
 
@@ -36,6 +44,7 @@ import pytest
 
 from .neutrino_run import NEUTRINO_DATA, IsolatedNeutrino, require_isolated_run, send_keys
 from .test_screencap_api import (  # noqa: F401 -- neutrino is a fixture
+    _binary_has,
     _get,
     _require_fresh_binary,
     _settle_startup,
@@ -75,6 +84,33 @@ INFOBAR_GONE = 8.0
 _OUTCOME = re.compile(
     r"^\[screencap\] (?P<path>.+?): (?P<verdict>ok|FAILED)(?P<note>.*)$"
 )
+
+
+# What the guard below looks for: a class name, deliberately NOT the log
+# prefix in the regex above.
+#
+# The prefix is the tempting marker -- a binary without it cannot emit a
+# single line these tests read. It is also the wrong one. If somebody
+# rewords the outcome line while the service itself works, that is a
+# regression in the very contract this file pins and has to go red; a
+# marker drawn from the parsed text would turn precisely that regression
+# into a silent skip. An existence marker has to be independent of the
+# behaviour under test.
+#
+# The class name also covers more ground: test_http_rejects_a_path_as_name
+# depends on validBasename() in the CGI and on no log line at all.
+#
+# It is visible because the generic build links with -rdynamic
+# (make/env.mk:50), which puts every global symbol into .dynsym, where a
+# strip cannot reach it. Measured on the analogue that master does have:
+# CScreenShot's methods hold 20 .dynsym entries in today's binary, e.g.
+# _ZN11CScreenShot8SaveFileEv. _binary_has() searches the file as raw
+# bytes and finds the name inside the mangled symbol.
+#
+# Should -rdynamic ever go away, this file skips on a healthy binary --
+# the survivable direction, and -rs in make/tests.mk makes it loud rather
+# than silent.
+SERVICE_SYMBOL = "CScreencapService"
 
 
 # note is "" exactly when the capture was clean; see _OUTCOME above.
@@ -179,6 +215,52 @@ def _start(workdir: Path, display: str, shots_dir: str, count: int) -> IsolatedN
 
 
 @pytest.fixture
+def _service_in_binary():
+    """Skip -- not fail -- a binary that never had a screencap service.
+
+    CScreencapService lives in src/driver/screencap_service.cpp on
+    neutrino's master.screencap. On master the file does not exist, so
+    against a master build the assertions below do not describe a service
+    that misbehaves; they describe one that was never linked in. Measured
+    2026-09-20: five of the seven tests here failed with messages that
+    read like a broken service ("no series ran: only 0 capture(s)"), and
+    --maxfail=1 in make/tests.mk took the whole GUI suite down with them
+    at test 58 of 68, so ten later tests and all of tests-web never ran.
+
+    Requested through @pytest.mark.usefixtures rather than by argument or
+    autouse. usefixtures because the guard has to run BEFORE `neutrino`,
+    `series` and `owned_display` -- otherwise every skip first pays the
+    twenty seconds of the start it is skipping -- and pytest guarantees
+    that: getfixtureinfo() builds the closure as deduplicate_names(
+    autousenames, usefixturesnames, argnames) and then sorts it by scope
+    alone, stably, so a usefixtures name stays ahead of an argument at the
+    same scope. Not autouse, because two tests here must keep running on a
+    master build and an autouse fixture would have to ask a marker which
+    is which -- and the gui marker is undeclared documentation today
+    (its PytestUnknownMarkWarning is what --disable-warnings hides), not
+    something that should start deciding what runs.
+
+    The blind spot, named rather than papered over: screencap_service.cpp
+    is compiled unconditionally, so a tree carrying the service while the
+    key and the CGI still went through CScreenShot would pass this guard
+    and fail below. On master.screencap that cannot happen -- 89bf51586b,
+    which moves every screenshot onto the service, is the base of the
+    series -- and anywhere else the failure names itself.
+    """
+    # "nothing built at all" is a different answer and deserves its own:
+    # _binary_has() swallows the OSError and would report a missing
+    # service where the truth is a missing build.
+    _require_fresh_binary()
+    if not _binary_has(SERVICE_SYMBOL):
+        pytest.skip(
+            f"the installed binary carries no {SERVICE_SYMBOL}: it was built "
+            "from neutrino's master, where src/driver/screencap_service.cpp "
+            "does not exist. Check out master.screencap in sources/neutrino "
+            "and run `make runtime-sync`"
+        )
+
+
+@pytest.fixture
 def series(tmp_path: Path, owned_display):
     workdir = tmp_path / "series"
     shots = workdir / "shots"
@@ -218,6 +300,7 @@ def test_check_series_rejects_the_collision():
 
 
 @pytest.mark.gui
+@pytest.mark.usefixtures("_service_in_binary")
 def test_every_capture_gets_its_own_file(series):
     """Every capture in a series gets a file of its own.
 
@@ -250,6 +333,7 @@ def test_every_capture_gets_its_own_file(series):
 
 
 @pytest.mark.gui
+@pytest.mark.usefixtures("_service_in_binary")
 def test_unwritable_dir_falls_back_to_tmp(tmp_path, owned_display):
     """An unwritable screenshot_dir does not lose the shot, and does not
     pretend the shot went where it was asked to go.
@@ -307,6 +391,7 @@ def test_unwritable_dir_falls_back_to_tmp(tmp_path, owned_display):
 
 
 @pytest.mark.gui
+@pytest.mark.usefixtures("_service_in_binary")
 def test_http_rejects_a_path_as_name(neutrino, tmp_path):  # noqa: F811
     """A path in "name" is refused before anything is written.
 
@@ -343,6 +428,7 @@ def test_http_rejects_a_path_as_name(neutrino, tmp_path):  # noqa: F811
 
 
 @pytest.mark.gui
+@pytest.mark.usefixtures("_service_in_binary")
 def test_http_refuses_a_layer_the_platform_cannot_deliver(neutrino):  # noqa: F811
     """Video alone, on a PC with no tuner: refused, and no file.
 
@@ -383,6 +469,7 @@ def test_http_refuses_a_layer_the_platform_cannot_deliver(neutrino):  # noqa: F8
 
 
 @pytest.mark.gui
+@pytest.mark.usefixtures("_service_in_binary")
 def test_http_marks_a_missing_layer_instead_of_calling_it_clean(neutrino):  # noqa: F811
     """A capture that lost a layer is ok, but says which one it lost.
 
@@ -443,6 +530,14 @@ def test_shutdown_during_a_series_ends(tmp_path, owned_display):
     finish and joins. A shutdown that waited for all screenshot_count
     captures, or that tore the decoder out from under the worker, would
     show up here as a timeout or as a signal in the log.
+
+    Deliberately left off the service guard the other five carry
+    (WORK-281): this test reads no [screencap] line, only the exit time
+    and the log's crash strings. On master the screenshot key still
+    builds a CScreenShot, whose Start() leaves a detached encoder thread
+    behind, so "does a SIGTERM mid-series end cleanly" is a real question
+    on that half too. Guarding it would have bought a tidier skip count
+    by giving up coverage that works today.
     """
     workdir = tmp_path / "shutdown"
     shots = workdir / "shots"
