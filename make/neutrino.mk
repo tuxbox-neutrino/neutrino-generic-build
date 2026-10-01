@@ -339,7 +339,7 @@ ifeq ($(NEUTRINO_STAGE_RUNTIME),1)
 	@if [ -d "$(ROOT_DIR)/skel-root" ]; then \
 		rsync -a --no-owner --no-group --ignore-existing "$(ROOT_DIR)/skel-root/" "$(NEUTRINO_RUNTIME_PREFIX_ABS)/"; \
 	fi
-	@# Overlay the yWeb webroot from the staged install, not from data/y-web.
+	@# Overlay the yWeb webroot from the staged install, not from data/web-ui.
 	@# The sources carry %() placeholders that only install-data-hook expands;
 	@# copying them verbatim leaves scripts/Y_Tools.sh a shell syntax error.
 	@yweb_src="$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_RUNTIME_TUXBOX)/neutrino/httpd"; \

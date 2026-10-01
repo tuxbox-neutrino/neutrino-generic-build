@@ -414,7 +414,7 @@ runtime-sync: $(NEUTRINO_INSTALL_STAMP) yweb-install-sysroot
 	else \
 		echo "[runtime-sync] Warning: Neutrino binary missing at $$real_bin." >&2; \
 	fi
-	@# Overlay the yWeb webroot from the staged install, not from data/y-web.
+	@# Overlay the yWeb webroot from the staged install, not from data/web-ui.
 	@# The sources carry %() placeholders that only install-data-hook expands;
 	@# copying them verbatim leaves scripts/Y_Tools.sh a shell syntax error.
 	@yweb_src="$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_RUNTIME_TUXBOX)/neutrino/httpd"; \

@@ -13,7 +13,7 @@
 # own install into the staging tree and mirror that expanded result.
 #
 # Note: a file only reaches the webroot once it is listed in the matching
-# data/y-web Makefile.am.
+# data/web-ui Makefile.am (data/y-web before neutrino 96c44c676c).
 #
 # Usage:
 #   make yweb-install          - Install yWeb files to sysroot and runtime
@@ -27,8 +27,12 @@
 #
 # =============================================================================
 
-# Source directory containing yWeb files
-YWEB_SRC_DIR := $(NEUTRINO_SRC_DIR)/data/y-web
+# Source directory containing yWeb files. neutrino 96c44c676c renamed it from
+# data/y-web to data/web-ui; older checkouts (NEUTRINO_BRANCH) still use the old
+# name. Decide by the source tree: a build tree configured before the rename
+# keeps a stale data/y-web whose Makefile points at a Makefile.am that is gone.
+YWEB_SUBDIR := $(if $(wildcard $(NEUTRINO_SRC_DIR)/data/web-ui/Makefile.am),data/web-ui,data/y-web)
+YWEB_SRC_DIR := $(NEUTRINO_SRC_DIR)/$(YWEB_SUBDIR)
 
 # Staging webroot produced by neutrino's "make install" with DESTDIR.
 # PRIVATE_HTTPDDIR is configured as an absolute runtime path, so the staged
@@ -47,12 +51,12 @@ yweb-install: yweb-install-sysroot yweb-install-runtime
 yweb-install-sysroot:
 	@# Guard and action share one shell: each recipe line gets its own, so an
 	@# "exit 0" on a separate line would not skip what follows.
-	@if [ ! -d "$(NEUTRINO_BUILD_DIR)/data/y-web" ]; then \
-		echo "[yweb-install] Build tree not found: $(NEUTRINO_BUILD_DIR)/data/y-web"; \
+	@if [ ! -d "$(NEUTRINO_BUILD_DIR)/$(YWEB_SUBDIR)" ]; then \
+		echo "[yweb-install] Build tree not found: $(NEUTRINO_BUILD_DIR)/$(YWEB_SUBDIR)"; \
 		echo "[yweb-install] Run 'make neutrino' first."; \
 	else \
 		echo "[yweb-install] Installing yWeb into staging (expands placeholders)..."; \
-		$(MAKE) --no-print-directory -C "$(NEUTRINO_BUILD_DIR)/data/y-web" install \
+		$(MAKE) --no-print-directory -C "$(NEUTRINO_BUILD_DIR)/$(YWEB_SUBDIR)" install \
 			DESTDIR="$(NEUTRINO_INSTALL_DIR)" config_DATA= || exit 1; \
 		echo "[yweb-install] Staging updated: $(YWEB_SYSROOT_DIR)"; \
 	fi
