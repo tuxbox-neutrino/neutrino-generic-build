@@ -19,6 +19,9 @@
 #   make yweb-install          - Install yWeb files to sysroot and runtime
 #   make yweb-install-sysroot  - Install only to sysroot (no runtime sync)
 #
+# Every yweb-* target is also reachable as webui-*, after the data/web-ui
+# directory name (e.g. make webui-install).
+#
 # After running yweb-install, simply refresh your browser (F5) to see changes.
 #
 # Prerequisites:
@@ -105,3 +108,9 @@ yweb-status:
 		echo "Runtime exists: NO (run 'make runtime-sync' first)"; \
 	fi
 	@echo ""
+
+# webui-* aliases, named after data/web-ui. Plain prerequisites, so make runs
+# each yweb-* recipe once even when both names are given.
+YWEB_ALIASES := install install-sysroot install-runtime clean status
+.PHONY: $(addprefix webui-,$(YWEB_ALIASES))
+$(foreach t,$(YWEB_ALIASES),$(eval webui-$(t): yweb-$(t)))

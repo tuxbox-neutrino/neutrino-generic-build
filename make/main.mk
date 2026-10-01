@@ -124,6 +124,7 @@ help:
 	@echo "  yweb-install      : yWeb-Dateien direkt ins Sysroot/Runtime kopieren (schneller Test)"
 	@echo "  yweb-install-sysroot: Nur ins Sysroot kopieren (ohne Runtime-Sync)"
 	@echo "  yweb-status       : Zeigt yWeb-Pfade und Installationsstatus"
+	@echo "  webui-*           : Alias für yweb-* (install, install-sysroot, install-runtime, clean, status)"
 	@echo ""
 	@echo "Laufzeit"
 	@echo "  run               : Gestagtes Root direkt auf dem Host starten"
