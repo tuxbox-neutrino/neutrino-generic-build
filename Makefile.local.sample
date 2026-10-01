@@ -139,7 +139,7 @@
 #  eigenes WebTV-Repository.
 #
 #NEUTRINO_WEB_PORT := 31344
-#  Port des yWeb-Interfaces, der beim erstmaligen Erzeugen von `root/usr/var/tuxbox/config/nhttpd.conf`
+#  Port des Web-Interfaces, der beim erstmaligen Erzeugen von `root/usr/var/tuxbox/config/nhttpd.conf`
 #  durch `make runtime-sync` gesetzt wird. Bestehende Werte werden nicht überschrieben.
 #
 #NEUTRINO_WEB_HOST := 0.0.0.0

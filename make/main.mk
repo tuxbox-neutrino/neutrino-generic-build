@@ -40,7 +40,7 @@ include make/neutrino.mk
 include make/plugins.mk
 include make/lua.mk
 include make/web.mk
-include make/yweb.mk
+include make/webui.mk
 include make/tests.mk
 include make/package.mk
 include make/hosttools.mk
@@ -121,10 +121,10 @@ help:
 	@echo "  run-tsan          : TSAN-Build bauen + starten (ALLOW_NON_ROOT=1)"
 	@echo ""
 	@echo "Entwicklung"
-	@echo "  yweb-install      : yWeb-Dateien direkt ins Sysroot/Runtime kopieren (schneller Test)"
-	@echo "  yweb-install-sysroot: Nur ins Sysroot kopieren (ohne Runtime-Sync)"
-	@echo "  yweb-status       : Zeigt yWeb-Pfade und Installationsstatus"
-	@echo "  webui-*           : Alias für yweb-* (install, install-sysroot, install-runtime, clean, status)"
+	@echo "  webui-install     : Web-Interface direkt ins Sysroot/Runtime installieren (schneller Test)"
+	@echo "  webui-install-sysroot: Nur ins Sysroot installieren (ohne Runtime-Sync)"
+	@echo "  webui-status      : Zeigt Web-Interface-Pfade und Installationsstatus"
+	@echo "  yweb-*            : Alias für webui-* (frühere Namen)"
 	@echo ""
 	@echo "Laufzeit"
 	@echo "  run               : Gestagtes Root direkt auf dem Host starten"
@@ -201,10 +201,10 @@ bootstrap: ## Run dependency setup and build Neutrino in one step
 	@echo "[bootstrap] Done. Next steps: 'make run' (host wrapper), 'make run-nspawn' (systemd-nspawn/proot), or 'ALLOW_NON_ROOT=1 make run-now'."
 
 .PHONY: runtime-sync
-# yweb-install-sysroot refreshes the staged webroot from the working tree, so
+# webui-install-sysroot refreshes the staged webroot from the working tree, so
 # an uncommitted page edit is visible after "make run"; the install stamp is
 # gated on the git HEAD hash and would not notice such an edit.
-runtime-sync: $(NEUTRINO_INSTALL_STAMP) yweb-install-sysroot
+runtime-sync: $(NEUTRINO_INSTALL_STAMP) webui-install-sysroot
 	@if [ ! -d "$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)" ]; then \
 		echo "[runtime-sync] Keine Installation gefunden. Bitte zuerst 'make neutrino' ausführen."; \
 		exit 1; \
@@ -415,13 +415,13 @@ runtime-sync: $(NEUTRINO_INSTALL_STAMP) yweb-install-sysroot
 	else \
 		echo "[runtime-sync] Warning: Neutrino binary missing at $$real_bin." >&2; \
 	fi
-	@# Overlay the yWeb webroot from the staged install, not from data/web-ui.
+	@# Overlay the web interface webroot from the staged install, not from data/web-ui.
 	@# The sources carry %() placeholders that only install-data-hook expands;
 	@# copying them verbatim leaves scripts/Y_Tools.sh a shell syntax error.
-	@yweb_src="$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_RUNTIME_TUXBOX)/neutrino/httpd"; \
-	yweb_rt="$(NEUTRINO_RUNTIME_PREFIX_ABS)$(N_PRIVATE_HTTPDDIR)"; \
-	if [ -d "$$yweb_src" ] && [ -d "$$yweb_rt" ]; then \
-		rsync -a --no-owner --no-group "$$yweb_src/" "$$yweb_rt/"; \
+	@webui_src="$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_RUNTIME_TUXBOX)/neutrino/httpd"; \
+	webui_rt="$(NEUTRINO_RUNTIME_PREFIX_ABS)$(N_PRIVATE_HTTPDDIR)"; \
+	if [ -d "$$webui_src" ] && [ -d "$$webui_rt" ]; then \
+		rsync -a --no-owner --no-group "$$webui_src/" "$$webui_rt/"; \
 	fi
 
 .PHONY: run

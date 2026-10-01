@@ -10,7 +10,7 @@ Danke für Ihren Beitrag / Thank you for contributing!
    **before** the parenthesis, e.g. `fix (deps): pin the luajit source ref`.
    Type is lowercase and one of `feat`, `fix`, `refactor`, `docs`, `build`, `ci`,
    `test`, `chore`; the scope names the touched area (`make`, `toolchain`, `deps`,
-   `plugins`, `yweb`, `package`, `shell`, `readme`, …). A type without a scope
+   `plugins`, `webui`, `package`, `shell`, `readme`, …). A type without a scope
    (`docs: fix a typo`) is fine, a scope without a type is not. Imperative mood,
    no trailing period, subject ≤ 72 characters. Anything beyond a one-line
    correction needs a body: one blank line after the subject, wrapped at 72
