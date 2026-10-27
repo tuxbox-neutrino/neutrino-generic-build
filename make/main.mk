@@ -201,10 +201,16 @@ bootstrap: ## Run dependency setup and build Neutrino in one step
 	@echo "[bootstrap] Done. Next steps: 'make run' (host wrapper), 'make run-nspawn' (systemd-nspawn/proot), or 'ALLOW_NON_ROOT=1 make run-now'."
 
 .PHONY: runtime-sync
-# webui-install-sysroot refreshes the staged webroot from the working tree, so
-# an uncommitted page edit is visible after "make run"; the install stamp is
-# gated on the git HEAD hash and would not notice such an edit.
-runtime-sync: $(NEUTRINO_INSTALL_STAMP) webui-install-sysroot
+# The web interface install refreshes the staged webroot from the working tree,
+# so an uncommitted page edit is visible after "make run"; the install stamp is
+# gated on the git HEAD hash and would not notice such an edit. It runs from
+# the recipe, after the install stamp: as the prerequisite webui-install-sysroot
+# it started next to the neutrino build under -j, and its sub-make regenerated
+# the autotools files in the shared source tree while the configure stamp ran
+# autogen there. The shared recipe (make/webui.mk) avoids a recursive $(MAKE)
+# of these makefiles, which would re-run the -j injection above.
+runtime-sync: $(NEUTRINO_INSTALL_STAMP)
+	$(WEBUI_INSTALL_SYSROOT)
 	@if [ ! -d "$(NEUTRINO_INSTALL_DIR)$(NEUTRINO_PREFIX)" ]; then \
 		echo "[runtime-sync] Keine Installation gefunden. Bitte zuerst 'make neutrino' ausführen."; \
 		exit 1; \

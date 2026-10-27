@@ -59,6 +59,7 @@ ${TAB}@printf 'PYTHON=%s\n' '\$(PYTHON)'
 ${TAB}@printf 'W164_POST=[%s]\n' '\$(W164_POST)'
 ${TAB}@printf 'GST_BUNDLE=%s\n' '\$(APPIMAGE_BUNDLE_GSTREAMER)'
 ${TAB}@printf 'GST_DEFINE=[%s]\n' '\$(NEUTRINO_GSTREAMER_FLAGS)'
+${TAB}@printf 'INSTALL_STAMP=%s\n' '\$(NEUTRINO_INSTALL_STAMP)'
 EOF
 
 # Run the probe with the given Makefile.local body (empty string = none) and
@@ -354,6 +355,36 @@ if [ "$post_gst" = 1 ] && [ "$post_gst_def" = "[-DENABLE_GSTREAMER=1]" ]; then
 else
 	ko "a Makefile.local.post flag still reaches the GStreamer switch" \
 		"bundle='$post_gst' want 1, define='$post_gst_def' want [-DENABLE_GSTREAMER=1]"
+fi
+
+# --- runtime-sync installs the web interface after the neutrino install -----
+# Under the default -j a second prerequisite next to the install stamp starts at
+# once: webui-install-sysroot's sub-make then regenerated the autotools files in
+# the shared source tree while the configure stamp ran autogen there, and both
+# failed ("required file './missing' not found") after every HEAD change. Read
+# the rule from make's database instead of building: the order is the contract.
+# So the rule has to depend on the install stamp alone, and its recipe has to
+# run the shared install as a command line of its own, not merely mention it in
+# a "@#" comment. make -p prints a target-specific variable of runtime-sync as
+# "runtime-sync: NAME = value" ahead of the rule line; those are skipped.
+rm -f "$WORK/Makefile.local"
+stamp="$(probe "" INSTALL_STAMP)"
+rule="$( cd "$WORK" && run_make -p -n -f probe.mk w164-probe 2>/dev/null \
+	| awk '/^runtime-sync: [^ ]+ (::?:?|[!?+])?=( |$)/ { next }
+		/^runtime-sync:/ { on = 1; print; next }
+		on && /^#/ { next }
+		on && /^\t/ { print; next }
+		on { exit }' )"
+deps="$(printf '%s\n' "$rule" | sed -n '1p')"
+recipe="$(printf '%s\n' "$rule" | sed '1d')"
+if [ -z "$stamp" ] || [ "$deps" != "runtime-sync: $stamp" ]; then
+	ko "runtime-sync installs the web interface only after the neutrino install" \
+		"the rule has to depend on the install stamp alone: '$deps' (stamp '$stamp')"
+elif printf '%s\n' "$recipe" | grep -qE "^${TAB}[-+@]*\\\$\\(WEBUI_INSTALL_SYSROOT\\)"; then
+	ok "runtime-sync installs the web interface only after the neutrino install"
+else
+	ko "runtime-sync installs the web interface only after the neutrino install" \
+		"the recipe no longer runs \$(WEBUI_INSTALL_SYSROOT)"
 fi
 
 printf -- '----\n'

@@ -50,19 +50,28 @@ WEBUI_RUNTIME_DIR := $(NEUTRINO_RUNTIME_PREFIX_ABS)$(N_PRIVATE_HTTPDDIR)
 webui-install: webui-install-sysroot webui-install-runtime
 	@echo "[webui-install] Done. Refresh browser to see changes."
 
+# The install into staging, shared with runtime-sync (make/main.mk), which runs
+# it from its own recipe after the neutrino install rather than through a
+# recursive $(MAKE) of this makefile. Guard and action share one shell: each
+# recipe line gets its own, so an "exit 0" on a separate line would not skip
+# what follows. The leading + marks the line recursive, which a $(MAKE)
+# reached through a variable is not on its own, so the sub-make keeps the
+# jobserver.
+define WEBUI_INSTALL_SYSROOT
++@if [ ! -d "$(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)" ]; then \
+	echo "[webui-install] Build tree not found: $(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)"; \
+	echo "[webui-install] Run 'make neutrino' first."; \
+else \
+	echo "[webui-install] Installing the web interface into staging (expands placeholders)..."; \
+	$(MAKE) --no-print-directory -C "$(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)" install \
+		DESTDIR="$(NEUTRINO_INSTALL_DIR)" config_DATA= || exit 1; \
+	echo "[webui-install] Staging updated: $(WEBUI_SYSROOT_DIR)"; \
+fi
+endef
+
 .PHONY: webui-install-sysroot
 webui-install-sysroot:
-	@# Guard and action share one shell: each recipe line gets its own, so an
-	@# "exit 0" on a separate line would not skip what follows.
-	@if [ ! -d "$(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)" ]; then \
-		echo "[webui-install] Build tree not found: $(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)"; \
-		echo "[webui-install] Run 'make neutrino' first."; \
-	else \
-		echo "[webui-install] Installing the web interface into staging (expands placeholders)..."; \
-		$(MAKE) --no-print-directory -C "$(NEUTRINO_BUILD_DIR)/$(WEBUI_SUBDIR)" install \
-			DESTDIR="$(NEUTRINO_INSTALL_DIR)" config_DATA= || exit 1; \
-		echo "[webui-install] Staging updated: $(WEBUI_SYSROOT_DIR)"; \
-	fi
+	$(WEBUI_INSTALL_SYSROOT)
 
 .PHONY: webui-install-runtime
 webui-install-runtime: webui-install-sysroot
