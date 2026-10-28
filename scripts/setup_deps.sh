@@ -28,24 +28,38 @@ NEUTRINO_DEPS_DNF=(
   libogg-devel
 )
 
-GSTREAMER_DEPS_APT=(
-  libgstreamer1.0-dev
-  libgstreamer-plugins-base1.0-dev
-  libgstreamer-plugins-bad1.0-dev
+# libstb-hal's generic backend: libmpv plays files, streams and live TV, SDL3
+# opens the window with an OpenGL ES 2.0 context and takes input and audio,
+# libdrm finds the display on KMS. SDL3 itself comes from the distribution
+# where it has one (SDL3_PACKAGES below); elsewhere make/third_party/sdl3.mk
+# builds it, and the remaining entries are what that build needs to get its
+# X11, Wayland, KMS, ALSA and PulseAudio backends.
+GENERIC_HAL_DEPS_APT=(
+  libmpv-dev libdrm-dev libgbm-dev libegl-dev libgles-dev
+  libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev
+  libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols
+  libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
 )
 
-GSTREAMER_DEPS_DNF=(
-  gstreamer1-devel
-  gstreamer1-plugins-base-devel
-  gstreamer1-plugins-bad-free-devel
+GENERIC_HAL_DEPS_DNF=(
+  mpv-devel libdrm-devel mesa-libgbm-devel libglvnd-devel
+  libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXi-devel
+  libXScrnSaver-devel libXfixes-devel libxkbcommon-devel wayland-devel
+  wayland-protocols-devel alsa-lib-devel pulseaudio-libs-devel systemd-devel
+  dbus-devel
 )
+
+# Installed where the distribution has them (Debian 13, Fedora 41 and later);
+# a host without them gets SDL3 from make/third_party/sdl3.mk instead, so they
+# never block the build.
+SDL3_PACKAGES_APT=(libsdl3-dev)
+SDL3_PACKAGES_DNF=(SDL3-devel)
 
 # ffmpeg dev libraries are needed ONLY when building against the host ffmpeg
 # (FFMPEG_USE_SYSTEM=1). The default build compiles ffmpeg locally and links
 # against that, so these must not be unconditional core deps: ffmpeg-devel in
 # particular lives in RPMFusion on Fedora and would break `make deps` there for
-# a package the default build never uses. Appended to core only on opt-in below,
-# mirroring the GStreamer handling.
+# a package the default build never uses. Appended to core only on opt-in below.
 FFMPEG_SYSTEM_DEPS_APT=(
   libavformat-dev libswscale-dev libswresample-dev
 )
@@ -91,12 +105,12 @@ done
 CORE_PACKAGES_APT=(
   build-essential git pkg-config cmake ninja-build nasm automake autoconf libtool
   curl rsync patch xz-utils
-  gettext libssl-dev libgnutls28-dev libcurl4-openssl-dev libjpeg-dev libpng-dev libtiff-dev libglew-dev
-  freeglut3-dev libao-dev libmad0-dev libid3tag0-dev libgif-dev libflac-dev
+  gettext libssl-dev libgnutls28-dev libcurl4-openssl-dev libjpeg-dev libpng-dev libtiff-dev
+  libmad0-dev libid3tag0-dev libgif-dev libflac-dev
   libreadline-dev liblua5.3-dev lua5.3 libluajit-5.1-dev
   python3 python3-dev python3-venv python3-pip
 )
-CORE_PACKAGES_APT+=("${NEUTRINO_DEPS_APT[@]}")
+CORE_PACKAGES_APT+=("${NEUTRINO_DEPS_APT[@]}" "${GENERIC_HAL_DEPS_APT[@]}")
 
 # Needed only for the test suites, packaging and optional run targets. Missing
 # entries are reported but never block the build.
@@ -124,15 +138,6 @@ OPTIONAL_PACKAGES_APT=(
   procps
 )
 
-ENABLE_GSTREAMER="${ENABLE_GSTREAMER:-0}"
-if [[ "${LIBSTB_HAL_CONFIGURE_FLAGS:-}" == *--enable-gstreamer* ]]; then
-  ENABLE_GSTREAMER=1
-fi
-# Opted into explicitly, so these are required for that build, not optional.
-if [[ "${ENABLE_GSTREAMER}" == "1" ]]; then
-  CORE_PACKAGES_APT+=("${GSTREAMER_DEPS_APT[@]}")
-fi
-
 # Host ffmpeg dev libs are required only when linking against system ffmpeg.
 FFMPEG_USE_SYSTEM="${FFMPEG_USE_SYSTEM:-0}"
 if [[ "${FFMPEG_USE_SYSTEM}" == "1" ]]; then
@@ -147,11 +152,11 @@ CORE_PACKAGES_DNF=(
   gcc gcc-c++ make git pkgconf-pkg-config cmake ninja-build nasm automake autoconf libtool
   curl rsync patch xz diffutils
   gettext openssl-devel gnutls-devel libcurl-devel libjpeg-turbo-devel libpng-devel libtiff-devel
-  glew-devel freeglut-devel libao-devel libmad-devel
+  libmad-devel
   libid3tag-devel giflib-devel flac-devel readline-devel lua-devel luajit-devel
   python3 python3-devel python3-virtualenv python3-pip
 )
-CORE_PACKAGES_DNF+=("${NEUTRINO_DEPS_DNF[@]}")
+CORE_PACKAGES_DNF+=("${NEUTRINO_DEPS_DNF[@]}" "${GENERIC_HAL_DEPS_DNF[@]}")
 
 OPTIONAL_PACKAGES_DNF=(
   opencv opencv-devel tesseract tesseract-devel leptonica-devel
@@ -166,10 +171,6 @@ OPTIONAL_PACKAGES_DNF=(
   appstream file desktop-file-utils squashfs-tools patchelf
   procps-ng
 )
-
-if [[ "${ENABLE_GSTREAMER}" == "1" ]]; then
-  CORE_PACKAGES_DNF+=("${GSTREAMER_DEPS_DNF[@]}")
-fi
 
 if [[ "${FFMPEG_USE_SYSTEM}" == "1" ]]; then
   CORE_PACKAGES_DNF+=("${FFMPEG_SYSTEM_DEPS_DNF[@]}")
@@ -348,6 +349,33 @@ require_prerequisites() {
   return 1
 }
 
+# SDL3 from the distribution, where it has one. An apt host only tries the
+# packages that have an installation candidate; dnf is simply asked, and a
+# missing package is not an error. Without it make/third_party/sdl3.mk builds
+# SDL3, so nothing here can stop the build.
+install_sdl3_packages() {
+  local pm="$1" p
+  local -a want=()
+  if [[ "${pm}" == "apt" ]]; then
+    for p in "${SDL3_PACKAGES_APT[@]}"; do
+      apt_installable "${p}" && want+=("${p}")
+    done
+    if [[ "${#want[@]}" -gt 0 ]]; then
+      "${SUDO_BIN[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "${want[@]}" || true
+    fi
+  elif [[ "${pm}" == "dnf" ]]; then
+    "${SUDO_BIN[@]}" dnf install -y "${SDL3_PACKAGES_DNF[@]}" || true
+  fi
+}
+
+sdl3_report() {
+  if pkg-config --atleast-version=3.2.0 sdl3 2>/dev/null; then
+    echo "[deps] SDL3: $(pkg-config --modversion sdl3) from the system"
+  else
+    echo "[deps] SDL3: not on this host, the build compiles it (make deps-sdl3)"
+  fi
+}
+
 create_venv() {
   if ! command -v python3 >/dev/null 2>&1; then
     {
@@ -418,6 +446,8 @@ doctor_report() {
     fi
   fi
 
+  sdl3_report
+
   # Optional tooling: only needed for specific targets, never blocking.
   echo "[deps] Optional: node=$(command -v node || echo missing)" \
        "npm=$(command -v npm || echo missing)" \
@@ -485,6 +515,7 @@ case "${MODE}" in
         # (e.g. libfuse2 renamed to libfuse2t64) would otherwise abort the whole
         # installation under `set -e` and take the core packages with it.
         pm_install "${PM}" "${CORE_PACKAGES[@]}" | tee -a "${LOG_FILE}"
+        install_sdl3_packages "${PM}" 2>&1 | tee -a "${LOG_FILE}"
         if ! pm_install "${PM}" "${OPTIONAL_PACKAGES[@]}" 2>&1 | tee -a "${LOG_FILE}"; then
           echo "[deps] Warning: some optional packages could not be installed." \
             "Tests, packaging or the sandboxed run targets may be unavailable." \
@@ -503,6 +534,7 @@ case "${MODE}" in
           echo "         $(install_hint "${PM}" "${MISSING_OPTIONAL[@]}")"
         } | tee -a "${LOG_FILE}"
       fi
+      sdl3_report | tee -a "${LOG_FILE}"
       # Verify instead of assuming: an install may have failed partially, and
       # where none was attempted nothing is there at all. Either way the build
       # must not continue on an incomplete host.

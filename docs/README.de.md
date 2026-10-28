@@ -95,8 +95,11 @@ sudo apt-get install -y \
   build-essential git pkg-config cmake ninja-build nasm automake autoconf libtool \
   curl rsync patch xz-utils \
   gettext libssl-dev libgnutls28-dev libcurl4-openssl-dev libjpeg-dev libpng-dev \
-  libtiff-dev libglew-dev freeglut3-dev \
-  libao-dev libmad0-dev libid3tag0-dev libgif-dev libflac-dev libreadline-dev \
+  libtiff-dev libmad0-dev libid3tag0-dev libgif-dev libflac-dev libreadline-dev \
+  libmpv-dev libdrm-dev libgbm-dev libegl-dev libgles-dev \
+  libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev libxss-dev \
+  libxfixes-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+  libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
   liblua5.3-dev lua5.3 libluajit-5.1-dev python3 python3-dev python3-venv python3-pip python3-opencv \
   python3-numpy tesseract-ocr libleptonica-dev xvfb x11-apps fbcat netpbm \
   fonts-dejavu-core libevdev-dev evtest proot libfuse2 appstream file \
@@ -119,7 +122,11 @@ sudo dnf install -y \
   gcc gcc-c++ make git pkgconf-pkg-config cmake ninja-build nasm automake autoconf libtool \
   curl rsync patch xz \
   gettext openssl-devel gnutls-devel libcurl-devel libjpeg-turbo-devel \
-  libpng-devel libtiff-devel glew-devel freeglut-devel libao-devel libmad-devel \
+  libpng-devel libtiff-devel libmad-devel \
+  mpv-devel libdrm-devel mesa-libgbm-devel libglvnd-devel \
+  libX11-devel libXext-devel libXrandr-devel libXcursor-devel libXi-devel \
+  libXScrnSaver-devel libXfixes-devel libxkbcommon-devel wayland-devel \
+  wayland-protocols-devel alsa-lib-devel pulseaudio-libs-devel systemd-devel dbus-devel \
   libid3tag-devel giflib-devel flac-devel readline-devel lua-devel luajit-devel python3 \
   python3-devel python3-virtualenv python3-pip opencv opencv-devel tesseract tesseract-devel \
   leptonica-devel xorg-x11-server-Xvfb netpbm-progs dejavu-sans-fonts \
@@ -133,31 +140,18 @@ kompiliert ffmpeg standardmäßig lokal. Installiere sie nur für einen
 Host-ffmpeg-Build (`FFMPEG_USE_SYSTEM=1`): apt `libavformat-dev libswscale-dev
 libswresample-dev`; dnf `ffmpeg-devel` (auf Fedora aus RPMFusion).
 
-### Optional: GStreamer-Playback (generic-pc)
+### SDL3 und libmpv (generic-pc)
 
-Zusätzliche Pakete für `--enable-gstreamer` (libstb-hal):
-
-**Debian/Ubuntu (apt):**
-
-```bash
-sudo apt-get install -y \
-  libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev
-```
-
-**Fedora/RHEL (dnf):**
-
-```bash
-sudo dnf install -y \
-  gstreamer1-devel gstreamer1-plugins-base-devel gstreamer1-plugins-bad-free-devel
-```
-
-Aktivierung z. B. in `Makefile.local`:
-
-```make
-LIBSTB_HAL_CONFIGURE_FLAGS := --enable-gstreamer
-```
-
-Hinweis: `make deps` nimmt die Pakete automatisch mit, wenn `LIBSTB_HAL_CONFIGURE_FLAGS` `--enable-gstreamer` enthält (alternativ `ENABLE_GSTREAMER=1 make deps`).
+Das generic-Backend von libstb-hal öffnet Fenster, OpenGL-ES-Kontext,
+Eingabe und Ton über SDL3 und spielt Dateien, Streams und Live-TV mit libmpv
+ab. libmpv ab 0.33 aus der Distribution genügt. SDL3 ab 3.2 kommt aus der
+Distribution, wo es eines gibt (`libsdl3-dev` auf Debian 13, `SDL3-devel`
+auf Fedora 41; `make deps` installiert es dort). Debian 12 und Ubuntu
+22.04/24.04 liefern kein SDL3: dort lädt und baut `make bootstrap` SDL3
+(`SDL3_VERSION`, Vorgabe 3.4.14) in den Sysroot, wie FFmpeg. Die X11-,
+Wayland-, ALSA- und PulseAudio-Header in den Listen oben braucht dieser
+Build für seine Backends. `make deps-sdl3-force` baut es auch dort, wo das
+System eines hat.
 
 Optional: Node.js/npm und Playwright (`npx`) werden nur für Web-Tests benötigt (`make test-web`).
 

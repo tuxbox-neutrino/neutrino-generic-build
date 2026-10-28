@@ -41,7 +41,7 @@ Beispiel Debian 12 – fehlende Laufzeitbibliotheken bereitstellen:
 ```bash
 sudo apt-get install -y \
   libavcodec59 libavformat59 libavutil57 libswscale6 libswresample4 \
-  libjpeg62-turbo freeglut3
+  libjpeg62-turbo libmpv2 libgles2 libegl1 libdrm2
 ```
 
 Das Skript `scripts/setup_deps.sh` richtet eine Python-Virtualenv ein und installiert die benötigten Module automatisiert.
