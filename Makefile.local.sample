@@ -34,8 +34,13 @@
 #NEUTRINO_CONFIGURE_FLAGS := --enable-debug
 #  Additional `./configure` flags forwarded to the core build.
 
-#LIBSTB_HAL_CONFIGURE_FLAGS := --enable-gstreamer
-#  Additional `./configure` flags forwarded to libstb-hal (e.g. enable GStreamer playback).
+#LIBSTB_HAL_CONFIGURE_FLAGS :=
+#  Additional `./configure` flags forwarded to libstb-hal.
+
+#SDL3_VERSION := 3.4.14
+#SDL3_FORCE := 1
+#  SDL3 is taken from the system when it has 3.2 or later, otherwise built into
+#  the sysroot; SDL3_FORCE=1 builds SDL3_VERSION even when the system has one.
 
 #NEUTRINO_CFLAGS_APPEND := -g3 -O0
 #NEUTRINO_CXXFLAGS_APPEND := -g3 -O0
